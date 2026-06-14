@@ -1,10 +1,6 @@
 """
 Tests — run with: pytest tests/ -v
 """
-import pytest
-from fastapi.testclient import TestClient
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def test_placeholder():
@@ -12,8 +8,9 @@ def test_placeholder():
     assert 1 + 1 == 2
 
 
-# Example of how to test the API once you have a .env:
+# Example of how to test the API once you have a .env configured:
 #
+# from fastapi.testclient import TestClient
 # from app.main import app
 # client = TestClient(app)
 #
