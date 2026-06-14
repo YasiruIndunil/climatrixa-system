@@ -1,0 +1,39 @@
+name: IoT CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'smart-env-iot/**'
+      - '.github/workflows/iot-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'smart-env-iot/**'
+      - '.github/workflows/iot-ci.yml'
+
+defaults:
+  run:
+    working-directory: smart-env-iot
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Skips cleanly until a PlatformIO project exists, so the workflow
+    # doesn't fail on the placeholder folder.
+    if: hashFiles('smart-env-iot/platformio.ini') != ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run
