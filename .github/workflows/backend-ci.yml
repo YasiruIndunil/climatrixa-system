@@ -46,7 +46,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
-          pytest -v
+          pytest -v9
 
   deploy:
     needs: test
