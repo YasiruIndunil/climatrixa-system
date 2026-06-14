@@ -12,13 +12,13 @@ on:
       - 'smart-env-backend/**'
       - '.github/workflows/backend-ci.yml'
 
-defaults:
-  run:
-    working-directory: smart-env-backend
-
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: smart-env-backend
 
     steps:
       - name: Checkout repository
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Cache pip dependencies
         uses: actions/cache@v4
