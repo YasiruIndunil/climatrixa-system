@@ -19,28 +19,40 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Skips cleanly until pubspec.yaml exists, so the workflow doesn't fail
-    # on the placeholder folder.
-    if: hashFiles('smart-env-mobile/pubspec.yaml') != ''
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check if Flutter project exists yet
+        id: check
+        run: |
+          if [ -f "pubspec.yaml" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No pubspec.yaml found yet - skipping build (placeholder component)."
+          fi
+
       - name: Set up Flutter
+        if: steps.check.outputs.exists == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
 
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
         run: flutter pub get
 
       - name: Run analyzer
+        if: steps.check.outputs.exists == 'true'
         run: flutter analyze
 
       - name: Run tests
+        if: steps.check.outputs.exists == 'true'
         run: flutter test
 
       - name: Build APK (debug)
+        if: steps.check.outputs.exists == 'true'
         run: flutter build apk --debug

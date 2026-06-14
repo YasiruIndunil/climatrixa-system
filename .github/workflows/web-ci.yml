@@ -19,15 +19,23 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Skips cleanly until package.json exists, so the workflow doesn't fail
-    # on the placeholder folder.
-    if: hashFiles('smart-env-web/package.json') != ''
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check if Node project exists yet
+        id: check
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json found yet - skipping build (placeholder component)."
+          fi
+
       - name: Set up Node.js
+        if: steps.check.outputs.exists == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -35,13 +43,17 @@ jobs:
           cache-dependency-path: smart-env-web/package-lock.json
 
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
         run: npm ci
 
       - name: Run lint
+        if: steps.check.outputs.exists == 'true'
         run: npm run lint --if-present
 
       - name: Run tests
+        if: steps.check.outputs.exists == 'true'
         run: npm test --if-present
 
       - name: Build
+        if: steps.check.outputs.exists == 'true'
         run: npm run build

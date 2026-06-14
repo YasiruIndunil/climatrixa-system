@@ -19,21 +19,31 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Skips cleanly until a PlatformIO project exists, so the workflow
-    # doesn't fail on the placeholder folder.
-    if: hashFiles('smart-env-iot/platformio.ini') != ''
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check if PlatformIO project exists yet
+        id: check
+        run: |
+          if [ -f "platformio.ini" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No platformio.ini found yet - skipping build (placeholder component)."
+          fi
+
       - name: Set up Python
+        if: steps.check.outputs.exists == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install PlatformIO
+        if: steps.check.outputs.exists == 'true'
         run: pip install platformio
 
       - name: Build firmware
+        if: steps.check.outputs.exists == 'true'
         run: pio run
