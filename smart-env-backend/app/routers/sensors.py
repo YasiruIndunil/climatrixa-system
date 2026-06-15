@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List
-from app.models.schemas import SensorCreate, SensorResponse
+from app.models.schemas import SensorCreate, SensorResponse, SensorUpdate
 from app.core.security import get_current_user, require_admin
 from app.core.database import db
 
@@ -44,6 +44,32 @@ async def create_sensor(
         "industry_profile": body.industry_profile or "general",
     }).execute()
 
+    return result.data[0]
+
+
+@router.patch("/{sensor_id}", response_model=SensorResponse)
+async def update_sensor(
+    sensor_id: str,
+    body: SensorUpdate,
+    admin: dict = Depends(require_admin)
+):
+    """
+    Update a sensor's name, location, industry profile, and/or coordinates.
+    Only the fields provided in the request body are changed (PATCH semantics).
+    Admin only.
+    """
+    existing = db.table("sensors").select("id").eq("id", sensor_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields provided to update"
+        )
+
+    result = db.table("sensors").update(update_data).eq("id", sensor_id).execute()
     return result.data[0]
 
 
