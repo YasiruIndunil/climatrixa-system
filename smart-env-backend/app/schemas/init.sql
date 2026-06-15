@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name   TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     role        TEXT NOT NULL DEFAULT 'public' CHECK (role IN ('admin', 'public')),
+    is_active   BOOLEAN NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.schemas import RegisterRequest, LoginRequest, TokenResponse
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, verify_password, create_access_token, get_current_user, require_admin
 from app.core.database import db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -59,6 +59,12 @@ async def login(body: LoginRequest):
 
     user = result.data[0]
 
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been disabled. Contact an administrator."
+        )
+
     if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,13 +85,57 @@ async def login(body: LoginRequest):
 
 
 @router.get("/me")
-async def me(current_user: dict = None):
+async def me(current_user: dict = Depends(get_current_user)):
     """
     Return the currently logged-in user's info.
     Requires: Authorization: Bearer <token> header.
+
+    The JWT payload (set at login/register) already contains id, email,
+    and role, so we decode it via get_current_user — no extra DB call
+    needed for the basic info. We also fetch full_name from the database
+    since it isn't stored in the token.
     """
-    # Import here to avoid circular imports
-    from app.core.security import get_current_user
-    from fastapi import Depends
-    # This route uses the dependency in main.py — see the protected example below
-    return {"message": "Use the /docs page to test authenticated routes"}
+    user_id = current_user.get("sub")
+
+    result = db.table("users").select("id, email, full_name, role, created_at").eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return result.data[0]
+
+
+@router.patch("/users/{user_id}/disable")
+async def disable_user(user_id: str, admin: dict = Depends(require_admin)):
+    """
+    Disable a user account (admin only).
+    A disabled user can no longer log in, but their data/history is preserved.
+    """
+    result = db.table("users").update({"is_active": False}).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return {"message": "User account disabled", "user_id": user_id}
+
+
+@router.patch("/users/{user_id}/enable")
+async def enable_user(user_id: str, admin: dict = Depends(require_admin)):
+    """
+    Re-enable a previously disabled user account (admin only).
+    """
+    result = db.table("users").update({"is_active": True}).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return {"message": "User account enabled", "user_id": user_id}
