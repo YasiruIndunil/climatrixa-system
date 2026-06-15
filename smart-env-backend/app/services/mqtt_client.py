@@ -82,9 +82,9 @@ def _on_message(client, userdata, msg):
         print(f"[MQTT] Error processing message: {e}")
 
 
-def _on_disconnect(client, userdata, rc, properties=None):
-    if rc != 0:
-        print(f"[MQTT] Unexpected disconnect (code {rc}). Will auto-reconnect...")
+def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+    if reason_code != 0:
+        print(f"[MQTT] Unexpected disconnect (code {reason_code}). Will auto-reconnect...")
 
 
 def start_mqtt_listener():
