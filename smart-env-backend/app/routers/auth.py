@@ -1,5 +1,9 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from app.models.schemas import RegisterRequest, LoginRequest, TokenResponse
+from app.models.schemas import (
+    RegisterRequest, LoginRequest, TokenResponse,
+    ChangePasswordRequest, ResetPasswordRequest,
+    UpdateProfileRequest, UpdateUserRoleRequest,
+)
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user, require_admin
 from app.core.database import db
 
@@ -104,6 +108,93 @@ async def me(current_user: dict = Depends(get_current_user)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+
+    return result.data[0]
+
+
+@router.patch("/me/password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Change your own password.
+    Requires your current password for verification, plus a new password.
+    """
+    user_id = current_user.get("sub")
+
+    result = db.table("users").select("password_hash").eq("id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not verify_password(body.old_password, result.data[0]["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+
+    db.table("users").update({
+        "password_hash": hash_password(body.new_password)
+    }).eq("id", user_id).execute()
+
+    return {"message": "Password changed successfully"}
+
+
+@router.patch("/me")
+async def update_profile(
+    body: UpdateProfileRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update your own profile. Currently supports updating full_name.
+    """
+    user_id = current_user.get("sub")
+
+    result = db.table("users").update({
+        "full_name": body.full_name
+    }).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return result.data[0]
+
+
+@router.patch("/users/{user_id}/reset-password")
+async def reset_password(
+    user_id: str,
+    body: ResetPasswordRequest,
+    admin: dict = Depends(require_admin)
+):
+    """
+    Admin-only: reset another user's password without needing their old
+    password. Useful for account recovery.
+    """
+    result = db.table("users").update({
+        "password_hash": hash_password(body.new_password)
+    }).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return {"message": "Password reset successfully", "user_id": user_id}
+
+
+@router.patch("/users/{user_id}/role")
+async def update_user_role(
+    user_id: str,
+    body: UpdateUserRoleRequest,
+    admin: dict = Depends(require_admin)
+):
+    """
+    Admin-only: change another user's role (admin / public).
+    """
+    result = db.table("users").update({
+        "role": body.role.value
+    }).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     return result.data[0]
 
