@@ -33,6 +33,27 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    """User changes their own password — requires the old password."""
+    old_password: str
+    new_password: str = Field(min_length=8, description="Minimum 8 characters")
+
+
+class ResetPasswordRequest(BaseModel):
+    """Admin resets another user's password — no old password required."""
+    new_password: str = Field(min_length=8, description="Minimum 8 characters")
+
+
+class UpdateProfileRequest(BaseModel):
+    """User updates their own profile (currently: full name only)."""
+    full_name: str
+
+
+class UpdateUserRoleRequest(BaseModel):
+    """Admin changes another user's role."""
+    role: UserRole
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -51,6 +72,18 @@ class SensorCreate(BaseModel):
         None, example="spice_factory",
         description="One of: general, spice_factory, supermarket, hospital, office"
     )
+
+
+class SensorUpdate(BaseModel):
+    """All fields optional — only provided fields are updated (PATCH semantics)."""
+    name: Optional[str] = Field(None, example="Factory Floor A - Renamed")
+    location: Optional[str] = Field(None, example="Spice Factory, Galle")
+    industry_profile: Optional[str] = Field(
+        None, example="supermarket",
+        description="One of: general, spice_factory, supermarket, hospital, office"
+    )
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class SensorResponse(BaseModel):
