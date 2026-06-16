@@ -2,12 +2,12 @@ name: Web CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'smart-env-web/**'
       - '.github/workflows/web-ci.yml'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'smart-env-web/**'
       - '.github/workflows/web-ci.yml'
