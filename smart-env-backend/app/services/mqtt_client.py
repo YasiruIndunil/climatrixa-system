@@ -20,6 +20,7 @@ Payload format (JSON):
 import json
 import ssl
 import threading
+import uuid
 import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
@@ -37,7 +38,7 @@ def _on_connect(client, userdata, flags, rc, properties=None):
         client.subscribe(topic, qos=1)
         print(f"[MQTT] Subscribed to: {topic}")
     else:
-        print(f"[MQTT] Connection failed with code {rc}")
+        print(f"[MQTT] Connection failed: {mqtt.connack_string(rc)} (code {rc})")
 
 
 def _on_message(client, userdata, msg):
@@ -95,13 +96,19 @@ def start_mqtt_listener():
     global _client
 
     _client = mqtt.Client(
-        client_id="smart-env-backend",
+        client_id=f"smart-env-backend-{uuid.uuid4().hex[:8]}",
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2
     )
 
     # HiveMQ requires TLS on port 8883
     _client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
     _client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
+
+    # Temporary diagnostic logging — masks the password but confirms what
+    # the backend actually loaded from environment variables at runtime.
+    masked_pw = (settings.mqtt_password[:2] + "***" + settings.mqtt_password[-2:]) if len(settings.mqtt_password) > 4 else "***"
+    print(f"[MQTT] DEBUG — username='{settings.mqtt_username}' (len={len(settings.mqtt_username)}), "
+          f"password='{masked_pw}' (len={len(settings.mqtt_password)})")
 
     _client.on_connect    = _on_connect
     _client.on_message    = _on_message
