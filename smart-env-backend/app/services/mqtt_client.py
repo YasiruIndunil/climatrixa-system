@@ -104,12 +104,6 @@ def start_mqtt_listener():
     _client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
     _client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
 
-    # Temporary diagnostic logging — masks the password but confirms what
-    # the backend actually loaded from environment variables at runtime.
-    masked_pw = (settings.mqtt_password[:2] + "***" + settings.mqtt_password[-2:]) if len(settings.mqtt_password) > 4 else "***"
-    print(f"[MQTT] DEBUG — username='{settings.mqtt_username}' (len={len(settings.mqtt_username)}), "
-          f"password='{masked_pw}' (len={len(settings.mqtt_password)})")
-
     _client.on_connect    = _on_connect
     _client.on_message    = _on_message
     _client.on_disconnect = _on_disconnect
