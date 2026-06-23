@@ -11,11 +11,24 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: RegisterRequest):
+async def register(
+    body: RegisterRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Register a new user.
-    Returns a JWT token so the user is logged in immediately after registering.
+    Register a new user. Admin only — users cannot self-register.
+    The creating admin's ID is recorded in created_by and updated_by.
+    Returns a JWT token for the newly created user.
     """
+    admin_id = current_user.get("sub")
+    admin_role = current_user.get("role")
+
+    if admin_role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can create new user accounts"
+        )
+
     # Check if email already exists
     existing = db.table("users").select("id").eq("email", body.email).execute()
     if existing.data:
@@ -30,6 +43,8 @@ async def register(body: RegisterRequest):
         "full_name": body.full_name,
         "password_hash": hash_password(body.password),
         "role": body.role.value,
+        "created_by": admin_id,
+        "updated_by": admin_id,
     }).execute()
 
     user = result.data[0]
@@ -151,7 +166,9 @@ async def update_profile(
     user_id = current_user.get("sub")
 
     result = db.table("users").update({
-        "full_name": body.full_name
+        "full_name": body.full_name,
+        "updated_by": user_id,
+        "updated_at": "NOW()",
     }).eq("id", user_id).execute()
 
     if not result.data:
@@ -190,7 +207,9 @@ async def update_user_role(
     Admin-only: change another user's role (admin / public).
     """
     result = db.table("users").update({
-        "role": body.role.value
+        "role": body.role.value,
+        "updated_by": admin.get("sub"),
+        "updated_at": "NOW()",
     }).eq("id", user_id).execute()
 
     if not result.data:

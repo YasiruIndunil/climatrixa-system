@@ -9,13 +9,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ── Users table ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email       TEXT UNIQUE NOT NULL,
-    full_name   TEXT NOT NULL,
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email         TEXT UNIQUE NOT NULL,
+    full_name     TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role        TEXT NOT NULL DEFAULT 'public' CHECK (role IN ('admin', 'public')),
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    role          TEXT NOT NULL DEFAULT 'public' CHECK (role IN ('admin', 'public')),
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 
