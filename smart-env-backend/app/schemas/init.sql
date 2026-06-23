@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS sensors (
     industry_profile TEXT DEFAULT 'general',
     api_key          TEXT UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
     is_active        BOOLEAN DEFAULT TRUE,
-    created_at       TIMESTAMPTZ DEFAULT NOW()
+    created_by       UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_by       UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON COLUMN sensors.api_key IS
@@ -62,7 +65,10 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     threshold_value DOUBLE PRECISION NOT NULL,
     notify_email    TEXT,
     is_active       BOOLEAN DEFAULT TRUE,
+    created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT valid_alert_type CHECK (alert_type IN (
         'temperature_high', 'temperature_low',
         'humidity_high', 'humidity_low',
@@ -103,6 +109,7 @@ CREATE TABLE IF NOT EXISTS user_sensor_access (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     sensor_id   UUID NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
+    created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
     assigned_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (user_id, sensor_id)
 );
@@ -124,6 +131,8 @@ CREATE TABLE IF NOT EXISTS user_alert_subscriptions (
     humidity    BOOLEAN NOT NULL DEFAULT TRUE,
     aqi         BOOLEAN NOT NULL DEFAULT TRUE,
     pressure    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_by  UUID REFERENCES users(id) ON DELETE SET NULL,
     updated_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (user_id, sensor_id)
 );

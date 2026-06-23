@@ -40,6 +40,7 @@ async def assign_sensor_to_user(
         result = db.table("user_sensor_access").insert({
             "user_id": user_id,
             "sensor_id": sensor_id,
+            "created_by": admin.get("sub"),
         }).execute()
     except Exception:
         raise HTTPException(

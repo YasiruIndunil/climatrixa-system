@@ -29,19 +29,22 @@ async def get_sensor(sensor_id: str):
 @router.post("/", response_model=SensorResponse, status_code=201)
 async def create_sensor(
     body: SensorCreate,
-    admin: dict = Depends(require_admin)  # Only admins can add sensors
+    admin: dict = Depends(require_admin)
 ):
     """
     Add a new sensor node. Admin only.
     Returns the created sensor including its generated api_key.
     Copy the api_key into your ESP32 firmware.
     """
+    admin_id = admin.get("sub")
     result = db.table("sensors").insert({
         "name": body.name,
         "location": body.location,
         "latitude": body.latitude,
         "longitude": body.longitude,
         "industry_profile": body.industry_profile or "general",
+        "created_by": admin_id,
+        "updated_by": admin_id,
     }).execute()
 
     return result.data[0]
@@ -68,6 +71,9 @@ async def update_sensor(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No fields provided to update"
         )
+
+    update_data["updated_by"] = admin.get("sub")
+    update_data["updated_at"] = "NOW()"
 
     result = db.table("sensors").update(update_data).eq("id", sensor_id).execute()
     return result.data[0]

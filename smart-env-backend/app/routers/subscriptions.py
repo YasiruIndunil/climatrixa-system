@@ -99,6 +99,8 @@ async def create_subscription(
             "humidity": body.humidity,
             "aqi": body.aqi,
             "pressure": body.pressure,
+            "created_by": current_user.get("sub"),
+            "updated_by": current_user.get("sub"),
         }).execute()
     except Exception:
         raise HTTPException(
@@ -127,6 +129,7 @@ async def update_subscription(
         "humidity": body.humidity,
         "aqi": body.aqi,
         "pressure": body.pressure,
+        "updated_by": current_user.get("sub"),
         "updated_at": "NOW()",
     }).eq("user_id", user_id).eq("sensor_id", sensor_id).execute()
 
