@@ -97,7 +97,44 @@ CREATE INDEX IF NOT EXISTS idx_predictions_sensor_time
     ON predictions (sensor_id, generated_at DESC);
 
 
--- ── Row Level Security (RLS) ──────────────────────────────────────────────────
+-- ── User sensor access table ──────────────────────────────────────────────────
+-- Admin assigns which sensors each user can see and subscribe to.
+CREATE TABLE IF NOT EXISTS user_sensor_access (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sensor_id   UUID NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, sensor_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_sensor_access_user
+    ON user_sensor_access (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sensor_access_sensor
+    ON user_sensor_access (sensor_id);
+
+
+-- ── User alert subscriptions table ────────────────────────────────────────────
+-- Per-user, per-sensor, per-parameter alert subscription settings.
+-- A user only receives alerts for parameters they have set to TRUE.
+CREATE TABLE IF NOT EXISTS user_alert_subscriptions (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sensor_id   UUID NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
+    temperature BOOLEAN NOT NULL DEFAULT TRUE,
+    humidity    BOOLEAN NOT NULL DEFAULT TRUE,
+    aqi         BOOLEAN NOT NULL DEFAULT TRUE,
+    pressure    BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, sensor_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user
+    ON user_alert_subscriptions (user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_sensor
+    ON user_alert_subscriptions (sensor_id);
+
+
+
 -- Enable RLS so the Flutter/React apps (using anon key) only see what they should.
 -- Your FastAPI backend uses the service key, so it bypasses RLS.
 
