@@ -3,13 +3,18 @@ from typing import Optional
 import bcrypt
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# OAuth2 scheme — expects "Authorization: Bearer <token>" header
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# HTTPBearer scheme — shows a simple "Bearer token" input in Swagger
+# instead of the confusing OAuth2 username/password/client_id form.
+# Usage in Swagger: click Authorize → paste your token from /auth/login
+bearer_scheme = HTTPBearer(
+    scheme_name="Bearer Token",
+    description="Paste the access_token returned by POST /auth/login"
+)
 
 
 def hash_password(password: str) -> str:
@@ -56,9 +61,11 @@ def decode_token(token: str) -> dict:
         )
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+) -> dict:
     """FastAPI dependency — inject into any route that needs auth."""
-    return decode_token(token)
+    return decode_token(credentials.credentials)
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:

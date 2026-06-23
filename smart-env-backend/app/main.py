@@ -48,6 +48,11 @@ app = FastAPI(
     Cloud backend for real-time environmental data collection, AI prediction,
     and alert management.
 
+    ### Authentication
+    1. POST `/auth/login` with `{"email": "...", "password": "..."}` to get an `access_token`
+    2. Click the **Authorize** button (🔒) above and paste the token
+    3. All protected endpoints will now work automatically
+
     ### How ESP32 sends data
     The ESP32 device POSTs to `/readings/` with its `api_key` for authentication.
     It can also publish via MQTT to `smartenv/{sensor_id}/data`.
@@ -55,10 +60,6 @@ app = FastAPI(
     ### How mobile/web apps get data
     - REST API: GET endpoints for sensors, readings, predictions
     - WebSocket: connect to `/readings/ws/live` for real-time stream
-
-    ### Authentication
-    - Admins and users authenticate via `/auth/login` → get JWT token
-    - Include in header: `Authorization: Bearer <token>`
     """,
     lifespan=lifespan,
 )
