@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import auth, sensors, readings, predictions, alerts
+from app.routers import auth, sensors, readings, predictions, alerts, access, subscriptions
 from app.services.mqtt_client import start_mqtt_listener, stop_mqtt_listener
 
 settings = get_settings()
@@ -83,6 +83,8 @@ app.include_router(sensors.router)
 app.include_router(readings.router)
 app.include_router(predictions.router)
 app.include_router(alerts.router)
+app.include_router(access.router)
+app.include_router(subscriptions.router)
 
 
 # ── Health check endpoint ──────────────────────────────────────────────────────

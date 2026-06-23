@@ -178,3 +178,39 @@ class AlertEventResponse(BaseModel):
     threshold_value: float
     message: str
     triggered_at: datetime
+
+
+# ── User sensor access schemas ─────────────────────────────────────────────────
+
+class SensorAccessResponse(BaseModel):
+    id: str
+    user_id: str
+    sensor_id: str
+    assigned_at: str
+
+    class Config:
+        from_attributes = True
+
+
+# ── Alert subscription schemas ─────────────────────────────────────────────────
+
+class SubscriptionUpdate(BaseModel):
+    """Update which parameters a user is subscribed to for a specific sensor."""
+    temperature: bool = True
+    humidity: bool = True
+    aqi: bool = True
+    pressure: bool = True
+
+
+class SubscriptionResponse(BaseModel):
+    id: str
+    user_id: str
+    sensor_id: str
+    temperature: bool
+    humidity: bool
+    aqi: bool
+    pressure: bool
+    updated_at: str
+
+    class Config:
+        from_attributes = True
