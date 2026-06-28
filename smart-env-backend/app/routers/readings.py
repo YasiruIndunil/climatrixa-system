@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, WebSocket, WebSocketDisconnect
 from typing import List
 import json
+from datetime import datetime, timezone
 from app.models.schemas import ReadingCreate, ReadingResponse, LatestReadingsResponse
 from app.core.database import db
 from app.services.alert_service import check_and_trigger_alerts
+from app.core.timezone import utc_to_slst, format_slst
 
 router = APIRouter(prefix="/readings", tags=["Readings"])
 
@@ -95,7 +97,15 @@ async def store_reading(body: ReadingCreate):
     # Check alert thresholds and fire alerts if needed
     await check_and_trigger_alerts(body.sensor_id, reading)
 
-    return reading
+    # Add local time fields to response
+    recorded_utc = datetime.fromisoformat(
+        reading["recorded_at"].replace("Z", "+00:00")
+    )
+    return {
+        **reading,
+        "recorded_at_local":   utc_to_slst(recorded_utc),
+        "recorded_at_display": format_slst(recorded_utc),
+    }
 
 
 @router.get("/latest", response_model=List[LatestReadingsResponse])
@@ -110,7 +120,7 @@ async def latest_readings():
     results = []
     for sensor in sensors.data:
         # Get the latest reading for this sensor
-        reading = (
+        latest = (
             db.table("readings")
             .select("*")
             .eq("sensor_id", sensor["id"])
@@ -118,13 +128,18 @@ async def latest_readings():
             .limit(1)
             .execute()
         )
-        if reading.data:
-            r = reading.data[0]
+        if latest.data:
+            r = latest.data[0]
+            recorded_utc = datetime.fromisoformat(
+                r["recorded_at"].replace("Z", "+00:00")
+            )
             results.append({
                 **r,
-                "sensor_name": sensor["name"],
-                "location": sensor["location"],
-                "aqi_status": _aqi_label(r["aqi"]),
+                "sensor_name":        sensor["name"],
+                "location":           sensor["location"],
+                "aqi_status":         _aqi_label(r["aqi"]),
+                "recorded_at_local":  utc_to_slst(recorded_utc),
+                "recorded_at_display": format_slst(recorded_utc),
             })
 
     return results
