@@ -135,6 +135,8 @@ class LatestReadingsResponse(BaseModel):
     pressure: Optional[float]
     aqi_status: str      # Good / Moderate / Unhealthy / Hazardous
     recorded_at: datetime
+    recorded_at_local: Optional[str] = None    # UTC+5:30 ISO string
+    recorded_at_display: Optional[str] = None  # 28 Jun 2026, 02:00 PM
 
 
 # ── Prediction Schemas ─────────────────────────────────────────────────────────
