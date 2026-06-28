@@ -20,7 +20,7 @@ Payload format (JSON):
 import json
 import ssl
 import threading
-import uuid
+#import uuid
 import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
@@ -86,6 +86,14 @@ def _on_message(client, userdata, msg):
 def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
     if reason_code != 0:
         print(f"[MQTT] Unexpected disconnect (code {reason_code}). Will auto-reconnect...")
+        # Reconnect with exponential backoff
+        import time
+        time.sleep(5)
+        try:
+            _client.reconnect()
+            print("[MQTT] Reconnected successfully")
+        except Exception as e:
+            print(f"[MQTT] Reconnect failed: {e}")
 
 
 def start_mqtt_listener():
@@ -96,8 +104,9 @@ def start_mqtt_listener():
     global _client
 
     _client = mqtt.Client(
-        client_id=f"smart-env-backend-{uuid.uuid4().hex[:8]}",
-        callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+        client_id="climatrixa-backend-prod",  # fixed ID — never changes
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        clean_session=False  # persist session — HiveMQ holds messages while offline
     )
 
     # HiveMQ requires TLS on port 8883
