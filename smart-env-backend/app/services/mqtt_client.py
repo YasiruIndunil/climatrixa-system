@@ -20,7 +20,6 @@ Payload format (JSON):
 import json
 import ssl
 import threading
-#import uuid
 import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
