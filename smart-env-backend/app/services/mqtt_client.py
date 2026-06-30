@@ -65,14 +65,21 @@ def _on_message(client, userdata, msg):
             return
 
         # Save reading to Supabase
-        db.table("readings").insert({
+        # If the ESP32 included its own NTP-synced timestamp (e.g. a
+        # buffered reading sent after reconnecting), use it so the
+        # reading is stored with the time it actually occurred rather
+        # than the time it arrived at the backend.
+        insert_data = {
             "sensor_id":   sensor_id,
             "temperature": payload["temperature"],
             "humidity":    payload["humidity"],
             "aqi":         payload["aqi"],
             "pressure":    payload.get("pressure"),
-        }).execute()
+        }
+        if payload.get("recorded_at"):
+            insert_data["recorded_at"] = payload["recorded_at"]
 
+        db.table("readings").insert(insert_data).execute()
         print(f"[MQTT] Saved reading from sensor {sensor_id}: "
               f"temp={payload['temperature']}°C, "
               f"humidity={payload['humidity']}%, "

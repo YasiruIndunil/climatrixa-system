@@ -78,13 +78,17 @@ async def store_reading(body: ReadingCreate):
         )
 
     # Save the reading
-    result = db.table("readings").insert({
+    insert_data = {
         "sensor_id": body.sensor_id,
         "temperature": body.temperature,
         "humidity": body.humidity,
         "aqi": body.aqi,
         "pressure": body.pressure,
-    }).execute()
+    }
+    if body.recorded_at:
+        insert_data["recorded_at"] = body.recorded_at
+
+    result = db.table("readings").insert(insert_data).execute()
 
     reading = result.data[0]
 

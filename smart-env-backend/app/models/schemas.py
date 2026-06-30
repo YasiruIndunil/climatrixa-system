@@ -113,7 +113,12 @@ class ReadingCreate(BaseModel):
     aqi: float = Field(description="Air Quality Index 0-500", example=45.0)
     pressure: Optional[float] = Field(None, description="hPa", example=1013.2)
     api_key: str = Field(description="Device API key configured on the ESP32")
-
+    recorded_at: Optional[str] = Field(
+        None,
+        description="ISO8601 UTC timestamp from ESP32 NTP clock. "
+                    "Used for buffered/delayed readings. "
+                    "If omitted, server arrival time is used."
+    )
 
 class ReadingResponse(BaseModel):
     id: str
