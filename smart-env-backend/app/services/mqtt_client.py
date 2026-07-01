@@ -1,25 +1,13 @@
 """
-MQTT Client Service
-────────────────────
-Connects to HiveMQ and listens for sensor data published by ESP32 devices.
-Runs as a background thread when FastAPI starts.
-
-Topic structure:
-    smartenv/{sensor_id}/data    ← ESP32 publishes here
-    smartenv/{sensor_id}/status  ← heartbeat / online status
-
-Payload format (JSON):
-    {
-        "temperature": 28.5,
-        "humidity": 62.3,
-        "aqi": 45.0,
-        "pressure": 1013.2,
-        "api_key": "device-key-here"
-    }
+MQTT Client Service — v2.1
+───────────────────────────
+Brand Key + MAC Address authentication.
+No per-device api_key needed.
+All Climatrixa devices share one brand key.
+Device identity resolved via MAC address lookup in sensors table.
 """
 import json
 import ssl
-import threading
 import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
@@ -28,47 +16,51 @@ settings = get_settings()
 
 _client: mqtt.Client | None = None
 
+BRAND_KEY = "climatrixa-secret-2026"  # must match firmware
+
 
 def _on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
-        print(f"[MQTT] Connected to HiveMQ broker")
-        # Subscribe to all sensor data topics
-        topic = f"{settings.mqtt_topic_prefix}/+/data"
-        client.subscribe(topic, qos=1)
-        print(f"[MQTT] Subscribed to: {topic}")
+        print("[MQTT] Connected to HiveMQ broker")
+        client.subscribe("smartenv/readings", qos=1)
+        print("[MQTT] Subscribed to: smartenv/readings")
     else:
-        print(f"[MQTT] Connection failed: {mqtt.connack_string(rc)} (code {rc})")
+        print(f"[MQTT] Connection failed (code {rc})")
 
 
 def _on_message(client, userdata, msg):
-    """Called every time an ESP32 publishes a reading."""
     try:
-        # Extract sensor_id from topic: smartenv/{sensor_id}/data
-        parts = msg.topic.split("/")
-        if len(parts) < 3:
-            return
-        sensor_id = parts[1]
-
         payload = json.loads(msg.payload.decode())
 
-        # Validate device API key
+        # ── Step 1: Validate brand key (proves it's our product) ──
+        if payload.get("brand_key") != BRAND_KEY:
+            print(f"[MQTT] Rejected — invalid brand key")
+            return
+
+        # ── Step 2: Look up sensor by MAC address ─────────────────
+        mac = payload.get("mac", "").upper()
+        if not mac:
+            print("[MQTT] Rejected — no MAC address in payload")
+            return
+
         sensor = (
             db.table("sensors")
             .select("id, is_active")
-            .eq("id", sensor_id)
-            .eq("api_key", payload.get("api_key", ""))
+            .eq("mac_address", mac)
             .execute()
         )
 
-        if not sensor.data or not sensor.data[0]["is_active"]:
-            print(f"[MQTT] Rejected message from sensor {sensor_id} — invalid api_key")
+        if not sensor.data:
+            print(f"[MQTT] Rejected — MAC {mac} not registered in system")
             return
 
-        # Save reading to Supabase
-        # If the ESP32 included its own NTP-synced timestamp (e.g. a
-        # buffered reading sent after reconnecting), use it so the
-        # reading is stored with the time it actually occurred rather
-        # than the time it arrived at the backend.
+        if not sensor.data[0]["is_active"]:
+            print(f"[MQTT] Rejected — sensor is inactive")
+            return
+
+        sensor_id = sensor.data[0]["id"]
+
+        # ── Step 3: Insert reading ─────────────────────────────────
         insert_data = {
             "sensor_id":   sensor_id,
             "temperature": payload["temperature"],
@@ -76,13 +68,15 @@ def _on_message(client, userdata, msg):
             "aqi":         payload["aqi"],
             "pressure":    payload.get("pressure"),
         }
+        # Use ESP32 NTP timestamp if provided (accurate for buffered readings)
         if payload.get("recorded_at"):
             insert_data["recorded_at"] = payload["recorded_at"]
 
         db.table("readings").insert(insert_data).execute()
-        print(f"[MQTT] Saved reading from sensor {sensor_id}: "
-              f"temp={payload['temperature']}°C, "
-              f"humidity={payload['humidity']}%, "
+
+        print(f"[MQTT] Saved reading from MAC {mac} "
+              f"(sensor: {sensor_id[:8]}...) "
+              f"temp={payload['temperature']}°C "
               f"aqi={payload['aqi']}")
 
     except Exception as e:
@@ -92,7 +86,6 @@ def _on_message(client, userdata, msg):
 def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
     if reason_code != 0:
         print(f"[MQTT] Unexpected disconnect (code {reason_code}). Will auto-reconnect...")
-        # Reconnect with exponential backoff
         import time
         time.sleep(5)
         try:
@@ -103,19 +96,13 @@ def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=N
 
 
 def start_mqtt_listener():
-    """
-    Start the MQTT client in a background thread.
-    Called once when FastAPI starts up (see main.py lifespan).
-    """
     global _client
 
     _client = mqtt.Client(
-        client_id="climatrixa-backend-prod",  # fixed ID — never changes
+        client_id="climatrixa-backend-prod",
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        clean_session=False  # persist session — HiveMQ holds messages while offline
     )
 
-    # HiveMQ requires TLS on port 8883
     _client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
     _client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
 
@@ -125,15 +112,13 @@ def start_mqtt_listener():
 
     try:
         _client.connect(settings.mqtt_broker_host, settings.mqtt_broker_port, keepalive=60)
-        # loop_start() runs the MQTT network loop in a background thread
         _client.loop_start()
         print(f"[MQTT] Connecting to {settings.mqtt_broker_host}:{settings.mqtt_broker_port}...")
     except Exception as e:
-        print(f"[MQTT] Could not connect: {e}. Readings via HTTP POST still work.")
+        print(f"[MQTT] Could not connect: {e}")
 
 
 def stop_mqtt_listener():
-    """Called when FastAPI shuts down."""
     global _client
     if _client:
         _client.loop_stop()

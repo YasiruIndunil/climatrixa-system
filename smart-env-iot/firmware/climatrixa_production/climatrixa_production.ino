@@ -1,9 +1,9 @@
 /*
-  Climatrixa — Production Firmware v1.1
+  Climatrixa — Production Firmware v2.1
   ======================================
-  ESP32-WROOM-32 with DHT22, MQ-135, BME280
-  Publishes sensor readings every 30s to HiveMQ via MQTT/TLS
-  Auto-reconnects WiFi (tries home first, mobile hotspot as fallback)
+  Brand API Key authentication + MAC address device identity
+  No per-device configuration needed — same firmware for ALL devices
+  Admin registers MAC in dashboard to activate a device
 
   Hardware wiring:
     DHT22   DAT  → GPIO4  (D4)
@@ -12,6 +12,8 @@
     BME280  SDA  → GPIO21 (D21)
     BME280  CSB  → 3V3 rail
     BME280  SDO  → GND rail (I2C address 0x76)
+
+  Partition scheme: Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)
 */
 
 #include <WiFi.h>
@@ -22,33 +24,31 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
+#include <time.h>
 
-// ── WIFI NETWORKS (tries in order, first success wins) ────────────
-struct WifiNetwork {
-  const char* ssid;
-  const char* password;
-};
-
+// ── WIFI NETWORKS ────────────────────────────────────────────────
+struct WifiNetwork { const char* ssid; const char* password; };
 const WifiNetwork WIFI_NETWORKS[] = {
-  { "SLT-Fiber-2.4G-A27D", "*******" },   // Home WiFi — tries first
-  { "iPhone", "********" },  // Mobile hotspot — fallback
-  // Add more networks here if needed:
-  // { "OtherNetwork", "OtherPass"  },
+  { "SLT-Fiber-A27D", "Vg2052048"   },  // Home WiFi
+  { "iPhone",         "12345678" },  // Mobile hotspot fallback
 };
 const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
-// ─────────────────────────────────────────────────────────────────
 
-// ── SENSOR CREDENTIALS (do not change) ───────────────────────────
-const char* SENSOR_ID = "f2a82465-ec5e-4961-88f0-8c40d1927c25";
-const char* API_KEY   = "0af5aa2ecbae9eb480ffa3d3c1b28f4c3143eba6db5f8e87";
+// ── BRAND KEY (same for ALL Climatrixa devices) ───────────────────
+const char* BRAND_KEY = "climatrixa-secret-2026";
 // ─────────────────────────────────────────────────────────────────
 
 // ── HIVEMQ BROKER ────────────────────────────────────────────────
-const char* MQTT_HOST = "41fb6d98e88d4924970fbda5ada55f22.s1.eu.hivemq.cloud";
-const int   MQTT_PORT = 8883;
-const char* MQTT_USER = "YasiruIndunil";
-const char* MQTT_PASS = "Yasiru@4G#1";
+const char* MQTT_HOST  = "41fb6d98e88d4924970fbda5ada55f22.s1.eu.hivemq.cloud";
+const int   MQTT_PORT  = 8883;
+const char* MQTT_USER  = "YasiruIndunil";
+const char* MQTT_PASS  = "Yasiru@4G";
+const char* MQTT_TOPIC = "smartenv/readings";  // single topic for all devices
 // ─────────────────────────────────────────────────────────────────
+
+// ── NTP ──────────────────────────────────────────────────────────
+const char* NTP_SERVER = "pool.ntp.org";
 
 // ── PINS ─────────────────────────────────────────────────────────
 #define DHTPIN    4
@@ -57,15 +57,15 @@ const char* MQTT_PASS = "Yasiru@4G#1";
 #define BME_SDA   21
 #define BME_SCL   22
 #define BME_ADDR  0x76
-// ─────────────────────────────────────────────────────────────────
 
 // ── TIMING ───────────────────────────────────────────────────────
-const unsigned long PUBLISH_INTERVAL_MS = 30000;  // 30 seconds
-const unsigned long WIFI_PER_NETWORK_MS = 12000;  // 12s per network attempt
-const unsigned long MQTT_RETRY_MS       = 5000;   // 5s between MQTT retries
-// ─────────────────────────────────────────────────────────────────
+const unsigned long PUBLISH_INTERVAL_MS = 30000;
+const unsigned long WIFI_PER_NETWORK_MS = 12000;
+const unsigned long MQTT_RETRY_MS       = 5000;
+const char* BUFFER_FILE = "/buffer.jsonl";
+const size_t MAX_BUFFER_BYTES = 1500000;
 
-// ── HiveMQ root CA (ISRG Root X1 — valid until 2035) ─────────────
+// ── HiveMQ root CA ───────────────────────────────────────────────
 static const char HIVEMQ_ROOT_CA[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
@@ -99,60 +99,79 @@ mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----
 )EOF";
-// ─────────────────────────────────────────────────────────────────
 
-// ── GLOBAL OBJECTS ────────────────────────────────────────────────
+// ── OBJECTS ──────────────────────────────────────────────────────
 DHT              dht(DHTPIN, DHTTYPE);
 Adafruit_BME280  bme;
 WiFiClientSecure wifiClient;
 PubSubClient     mqtt(wifiClient);
 
-bool bmeOk = false;
-unsigned long lastPublish   = 0;
-unsigned long lastMqttRetry = 0;
-char mqttTopic[80];
-char clientId[40];
+bool   bmeOk          = false;
+bool   timeIsSynced   = false;
+String macAddress     = "";
+unsigned long lastPublish      = 0;
+unsigned long lastMqttRetry    = 0;
+unsigned long lastFlushAttempt = 0;
 
 // ─────────────────────────────────────────────────────────────────
 void setupWiFi() {
   WiFi.mode(WIFI_STA);
-
   for (int i = 0; i < WIFI_NETWORK_COUNT; i++) {
     Serial.printf("\n[WiFi] Trying %d/%d: %s",
-                  i + 1, WIFI_NETWORK_COUNT, WIFI_NETWORKS[i].ssid);
-
+                  i+1, WIFI_NETWORK_COUNT, WIFI_NETWORKS[i].ssid);
     WiFi.begin(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].password);
-
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED) {
       if (millis() - start > WIFI_PER_NETWORK_MS) {
         Serial.printf("\n[WiFi] %s timed out\n", WIFI_NETWORKS[i].ssid);
-        WiFi.disconnect();
-        delay(500);
-        break;
+        WiFi.disconnect(); delay(500); break;
       }
-      delay(500);
-      Serial.print(".");
+      delay(500); Serial.print(".");
     }
-
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.printf("\n[WiFi] ✓ Connected to: %s\n", WIFI_NETWORKS[i].ssid);
-      Serial.printf("[WiFi]   IP address:  %s\n",
-                    WiFi.localIP().toString().c_str());
-      return;  // success — stop trying other networks
+      Serial.printf("\n[WiFi] Connected to: %s\n", WIFI_NETWORKS[i].ssid);
+      Serial.printf("[WiFi] IP: %s\n", WiFi.localIP().toString().c_str());
+      return;
     }
   }
+  Serial.println("\n[WiFi] All networks failed");
+}
 
-  Serial.println("\n[WiFi] All networks failed — will retry in loop");
+// ─────────────────────────────────────────────────────────────────
+void syncNTP() {
+  if (!WiFi.isConnected()) return;
+  Serial.print("[NTP] Syncing...");
+  configTime(0, 0, NTP_SERVER);
+  struct tm t;
+  int attempts = 0;
+  while (!getLocalTime(&t) && attempts++ < 10) { delay(500); Serial.print("."); }
+  if (attempts < 10) {
+    timeIsSynced = true;
+    char buf[32]; strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S UTC", &t);
+    Serial.printf("\n[NTP] Synced: %s\n", buf);
+  } else {
+    Serial.println("\n[NTP] Failed — will retry");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+String getTimestamp() {
+  if (!timeIsSynced) return "";
+  time_t now; time(&now);
+  struct tm t; gmtime_r(&now, &t);
+  char buf[32]; strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &t);
+  return String(buf);
 }
 
 // ─────────────────────────────────────────────────────────────────
 bool connectMQTT() {
   if (millis() - lastMqttRetry < MQTT_RETRY_MS) return false;
   lastMqttRetry = millis();
-
-  Serial.printf("[MQTT] Connecting as %s...", clientId);
-  if (mqtt.connect(clientId, MQTT_USER, MQTT_PASS)) {
+  Serial.printf("[MQTT] Connecting...");
+  // Use MAC as unique client ID
+  String clientId = "climatrixa-" + macAddress;
+  clientId.replace(":", "");
+  if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
     Serial.println(" Connected!");
     return true;
   }
@@ -161,51 +180,94 @@ bool connectMQTT() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-void publishReading() {
-  // ── Read DHT22 ──────────────────────────────────────────────────
+bool buildPayload(char* buf, size_t bufSize) {
   float dht_temp = dht.readTemperature();
   float dht_hum  = dht.readHumidity();
   bool  dhtOk    = !isnan(dht_temp) && !isnan(dht_hum);
 
-  // ── Read MQ-135 ─────────────────────────────────────────────────
-  int aqi_raw = analogRead(MQ135PIN);  // 0-4095 (12-bit ADC)
-
-  // ── Read BME280 ─────────────────────────────────────────────────
+  int   aqi_raw      = analogRead(MQ135PIN);
   float bme_temp     = bmeOk ? bme.readTemperature()       : 0.0f;
   float bme_hum      = bmeOk ? bme.readHumidity()          : 0.0f;
   float bme_pressure = bmeOk ? bme.readPressure() / 100.0f : 0.0f;
 
-  // ── Best available values ────────────────────────────────────────
-  // BME280 is more accurate — prefer it; fall back to DHT22
   float temperature = bmeOk ? bme_temp : (dhtOk ? dht_temp : 0.0f);
   float humidity    = bmeOk ? bme_hum  : (dhtOk ? dht_hum  : 0.0f);
-  float pressure    = bme_pressure;
 
-  // ── Build JSON ──────────────────────────────────────────────────
-  StaticJsonDocument<256> doc;
-  doc["sensor_id"]   = SENSOR_ID;
-  doc["api_key"]     = API_KEY;
+  StaticJsonDocument<300> doc;
+  doc["brand_key"]   = BRAND_KEY;          // proves it's our product
+  doc["mac"]         = macAddress;         // identifies which device
   doc["temperature"] = round(temperature * 100.0) / 100.0;
   doc["humidity"]    = round(humidity    * 100.0) / 100.0;
   doc["aqi"]         = aqi_raw;
-  doc["pressure"]    = round(pressure   * 100.0) / 100.0;
+  doc["pressure"]    = round(bme_pressure * 100.0) / 100.0;
 
-  char payload[256];
-  serializeJson(doc, payload);
+  String ts = getTimestamp();
+  if (ts.length() > 0) doc["recorded_at"] = ts;
 
-  // ── Publish ─────────────────────────────────────────────────────
-  bool ok = mqtt.publish(mqttTopic, payload, false);
+  size_t len = serializeJson(doc, buf, bufSize);
 
-  // ── Serial log ──────────────────────────────────────────────────
   Serial.println("\n──────────────────────────────────────────");
+  Serial.printf("[MAC]    %s\n", macAddress.c_str());
   Serial.printf("[DHT22]  Temp: %.2f°C  Hum: %.2f%%\n",
                 dhtOk ? dht_temp : 0.0f, dhtOk ? dht_hum : 0.0f);
   Serial.printf("[MQ-135] AQI raw: %d\n", aqi_raw);
-  if (bmeOk)
-    Serial.printf("[BME280] Temp: %.2f°C  Hum: %.2f%%  Pressure: %.2f hPa\n",
-                  bme_temp, bme_hum, bme_pressure);
-  Serial.printf("[MQTT]   %s → %s\n", ok ? "Published OK" : "FAILED", mqttTopic);
-  Serial.printf("[Data]   %s\n", payload);
+  if (bmeOk) Serial.printf("[BME280] Temp: %.2f°C  Hum: %.2f%%  Pressure: %.2f hPa\n",
+                            bme_temp, bme_hum, bme_pressure);
+  Serial.printf("[Time]   %s\n", ts.length() ? ts.c_str() : "not synced");
+  return len > 0;
+}
+
+// ─────────────────────────────────────────────────────────────────
+void saveToBuffer(const char* payload) {
+  File f = LittleFS.open(BUFFER_FILE, "a");
+  if (!f) return;
+  f.println(payload);
+  f.close();
+  Serial.println("[Buffer] Saved locally");
+}
+
+// ─────────────────────────────────────────────────────────────────
+void flushBuffer() {
+  if (!mqtt.connected()) return;
+  if (!LittleFS.exists(BUFFER_FILE)) return;
+  File f = LittleFS.open(BUFFER_FILE, "r");
+  if (!f || f.size() == 0) { if (f) f.close(); return; }
+  Serial.printf("[Buffer] Flushing %u bytes...\n", f.size());
+  int sent = 0;
+  String remaining = "";
+  while (f.available()) {
+    String line = f.readStringUntil('\n'); line.trim();
+    if (line.length() == 0) continue;
+    if (mqtt.publish(MQTT_TOPIC, line.c_str())) { sent++; delay(40); }
+    else {
+      remaining = line + "\n";
+      while (f.available()) remaining += f.readStringUntil('\n') + "\n";
+      break;
+    }
+  }
+  f.close();
+  if (remaining.length() > 0) {
+    File rf = LittleFS.open(BUFFER_FILE, "w");
+    rf.print(remaining); rf.close();
+    Serial.printf("[Buffer] Sent %d, %u bytes remaining\n", sent, remaining.length());
+  } else {
+    LittleFS.remove(BUFFER_FILE);
+    Serial.printf("[Buffer] All %d readings flushed\n", sent);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+void publishOrBuffer() {
+  char payload[300];
+  if (!buildPayload(payload, sizeof(payload))) return;
+  if (mqtt.connected()) {
+    bool ok = mqtt.publish(MQTT_TOPIC, payload);
+    Serial.printf("[MQTT]   %s\n", ok ? "Published OK" : "FAILED — buffering");
+    if (!ok) saveToBuffer(payload);
+  } else {
+    Serial.println("[MQTT]   Offline — buffering");
+    saveToBuffer(payload);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -213,62 +275,60 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("\n========================================");
-  Serial.println("  Climatrixa Production Firmware v1.1  ");
+  Serial.println("  Climatrixa Firmware v2.1              ");
+  Serial.println("  Brand Key + MAC Authentication        ");
   Serial.println("========================================");
 
-  // Build MQTT topic and client ID from sensor UUID
-  snprintf(mqttTopic, sizeof(mqttTopic), "smartenv/%s/data", SENSOR_ID);
-  snprintf(clientId,  sizeof(clientId),  "esp32-%s",
-           String(SENSOR_ID).substring(0, 8).c_str());
+  // Read MAC address from chip
+  WiFi.mode(WIFI_STA);
+  macAddress = WiFi.macAddress();
+  Serial.printf("[Device] MAC Address: %s\n", macAddress.c_str());
+  Serial.printf("[Device] Brand Key:   %s\n", BRAND_KEY);
 
-  // Init sensors
+  // Mount flash filesystem
+  if (!LittleFS.begin(true)) {
+    Serial.println("[LittleFS] Mount failed");
+  } else {
+    Serial.println("[LittleFS] Mounted OK");
+    if (LittleFS.exists(BUFFER_FILE)) {
+      File f = LittleFS.open(BUFFER_FILE, "r");
+      Serial.printf("[LittleFS] Existing buffer: %u bytes\n", f.size());
+      f.close();
+    }
+  }
+
   dht.begin();
   Serial.println("[DHT22]  Ready");
 
   Wire.begin(BME_SDA, BME_SCL);
   bmeOk = bme.begin(BME_ADDR);
-  Serial.printf("[BME280] %s\n", bmeOk ? "Ready" : "Not found — check wiring");
+  Serial.printf("[BME280] %s\n", bmeOk ? "Ready" : "Not found");
 
-  // Skip certificate verification (for testing)
-  wifiClient.setInsecure();
-
-  // MQTT config
+  wifiClient.setCACert(HIVEMQ_ROOT_CA);
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setKeepAlive(60);
-  mqtt.setSocketTimeout(10);
   mqtt.setBufferSize(512);
 
-  // Connect WiFi (tries all networks in order)
   setupWiFi();
+  if (WiFi.isConnected()) { syncNTP(); connectMQTT(); }
 
-  // Connect MQTT
-  if (WiFi.isConnected()) connectMQTT();
-
-  Serial.printf("\n[System] Topic:    %s\n", mqttTopic);
-  Serial.printf("[System] Interval: every %lu seconds\n",
-                PUBLISH_INTERVAL_MS / 1000);
+  Serial.printf("[System] Topic:    %s\n", MQTT_TOPIC);
+  Serial.printf("[System] Interval: every %lu seconds\n", PUBLISH_INTERVAL_MS/1000);
   Serial.println("[System] Running...\n");
 }
 
 // ─────────────────────────────────────────────────────────────────
 void loop() {
-  // ── Reconnect WiFi if dropped ───────────────────────────────────
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WiFi] Connection lost — reconnecting...");
-    setupWiFi();
-  }
-
-  // ── Reconnect MQTT if dropped ───────────────────────────────────
-  if (WiFi.isConnected() && !mqtt.connected()) {
-    connectMQTT();
-  }
-
+  if (WiFi.status() != WL_CONNECTED) { setupWiFi(); if (WiFi.isConnected() && !timeIsSynced) syncNTP(); }
+  if (WiFi.isConnected() && !mqtt.connected()) connectMQTT();
+  if (WiFi.isConnected() && !timeIsSynced) syncNTP();
   mqtt.loop();
-
-  // ── Publish every 30 seconds ────────────────────────────────────
-  if (mqtt.connected() &&
-      (millis() - lastPublish >= PUBLISH_INTERVAL_MS || lastPublish == 0)) {
+  if (millis() - lastPublish >= PUBLISH_INTERVAL_MS || lastPublish == 0) {
     lastPublish = millis();
-    publishReading();
+    publishOrBuffer();
+  }
+  if (mqtt.connected() && millis() - lastFlushAttempt >= 10000) {
+    lastFlushAttempt = millis();
+    flushBuffer();
   }
 }
