@@ -100,7 +100,8 @@ async def root():
     }
 
 
-@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"], 
+               operation_id="health_check")
 async def health():
     """Used by Render and uptime monitors to check if the service is alive."""
     return {"status": "healthy"}

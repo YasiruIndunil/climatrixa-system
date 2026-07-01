@@ -30,7 +30,7 @@
 // ── WIFI NETWORKS ────────────────────────────────────────────────
 struct WifiNetwork { const char* ssid; const char* password; };
 const WifiNetwork WIFI_NETWORKS[] = {
-  { "SLT-Fiber-A27D", "Vg2052048"   },  // Home WiFi
+  { "SLT-Fiber-2.4G-A27D", "Vg2052048"   },  // Home WiFi
   { "iPhone",         "12345678" },  // Mobile hotspot fallback
 };
 const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
@@ -280,7 +280,9 @@ void setup() {
   Serial.println("========================================");
 
   // Read MAC address from chip
+  // Must call WiFi.mode first then wait briefly before reading MAC
   WiFi.mode(WIFI_STA);
+  delay(100);  // allow WiFi hardware to initialise
   macAddress = WiFi.macAddress();
   Serial.printf("[Device] MAC Address: %s\n", macAddress.c_str());
   Serial.printf("[Device] Brand Key:   %s\n", BRAND_KEY);

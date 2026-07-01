@@ -101,24 +101,16 @@ class SensorResponse(BaseModel):
 
 
 # ── Reading Schemas ────────────────────────────────────────────────────────────
-
 class ReadingCreate(BaseModel):
-    """
-    This is what the ESP32 sends to POST /readings
-    The ESP32 authenticates with a device API key (not a JWT).
-    """
-    sensor_id: str
+    """HTTP POST fallback endpoint for ESP32 readings."""
+    brand_key: str = Field(description="Climatrixa brand key — proves device is our product")
+    mac: str = Field(description="ESP32 MAC address — identifies which sensor")
     temperature: float = Field(description="Celsius", example=28.5)
     humidity: float = Field(description="Relative humidity %", example=62.3)
     aqi: float = Field(description="Air Quality Index 0-500", example=45.0)
     pressure: Optional[float] = Field(None, description="hPa", example=1013.2)
-    api_key: str = Field(description="Device API key configured on the ESP32")
-    recorded_at: Optional[str] = Field(
-        None,
-        description="ISO8601 UTC timestamp from ESP32 NTP clock. "
-                    "Used for buffered/delayed readings. "
-                    "If omitted, server arrival time is used."
-    )
+    recorded_at: Optional[str] = Field(None, description="ISO8601 UTC timestamp from ESP32 NTP")
+
 
 class ReadingResponse(BaseModel):
     id: str

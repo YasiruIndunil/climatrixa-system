@@ -44,64 +44,41 @@ manager = ConnectionManager()
 
 @router.post("/", response_model=ReadingResponse, status_code=201)
 async def store_reading(body: ReadingCreate):
-    """
-    Store a new sensor reading sent by an ESP32.
-    The ESP32 sends its api_key for authentication (no JWT needed on the device).
+    # Validate brand key
+    if body.brand_key != "climatrixa-secret-2026":
+        raise HTTPException(status_code=401, detail="Invalid brand key")
 
-    Example ESP32 payload:
-    {
-        "sensor_id": "uuid-here",
-        "temperature": 28.5,
-        "humidity": 62.3,
-        "aqi": 45.0,
-        "pressure": 1013.2,
-        "api_key": "your-device-api-key"
-    }
-    """
-    # Validate the device API key
+    # Look up sensor by MAC address
     sensor = (
         db.table("sensors")
         .select("id, is_active")
-        .eq("id", body.sensor_id)
-        .eq("api_key", body.api_key)
+        .eq("mac_address", body.mac.upper())
         .execute()
     )
     if not sensor.data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid sensor_id or api_key"
-        )
+        raise HTTPException(status_code=404, detail="MAC address not registered")
     if not sensor.data[0]["is_active"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Sensor is inactive"
-        )
+        raise HTTPException(status_code=403, detail="Sensor is inactive")
+
+    sensor_id = sensor.data[0]["id"]
 
     # Save the reading
     insert_data = {
-        "sensor_id": body.sensor_id,
+        "sensor_id":   sensor_id,
         "temperature": body.temperature,
-        "humidity": body.humidity,
-        "aqi": body.aqi,
-        "pressure": body.pressure,
+        "humidity":    body.humidity,
+        "aqi":         body.aqi,
+        "pressure":    body.pressure,
     }
     if body.recorded_at:
         insert_data["recorded_at"] = body.recorded_at
 
     result = db.table("readings").insert(insert_data).execute()
-
     reading = result.data[0]
 
-    # Broadcast to all live WebSocket clients (Flutter app, web dashboard)
-    await manager.broadcast({
-        "event": "new_reading",
-        "data": reading
-    })
+    await manager.broadcast({"event": "new_reading", "data": reading})
+    await check_and_trigger_alerts(sensor_id, reading)
 
-    # Check alert thresholds and fire alerts if needed
-    await check_and_trigger_alerts(body.sensor_id, reading)
-
-    # Add local time fields to response
     recorded_utc = datetime.fromisoformat(
         reading["recorded_at"].replace("Z", "+00:00")
     )
