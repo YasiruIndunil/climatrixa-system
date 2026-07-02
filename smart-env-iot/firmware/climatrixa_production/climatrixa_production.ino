@@ -43,7 +43,7 @@ const char* BRAND_KEY = "climatrixa-secret-2026";
 const char* MQTT_HOST  = "41fb6d98e88d4924970fbda5ada55f22.s1.eu.hivemq.cloud";
 const int   MQTT_PORT  = 8883;
 const char* MQTT_USER  = "YasiruIndunil";
-const char* MQTT_PASS  = "Yasiru@4G";
+const char* MQTT_PASS  = "Yasiru@4G#1";
 const char* MQTT_TOPIC = "smartenv/readings";  // single topic for all devices
 // ─────────────────────────────────────────────────────────────────
 
@@ -306,7 +306,7 @@ void setup() {
   bmeOk = bme.begin(BME_ADDR);
   Serial.printf("[BME280] %s\n", bmeOk ? "Ready" : "Not found");
 
-  wifiClient.setCACert(HIVEMQ_ROOT_CA);
+  wifiClient.setInsecure();
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setKeepAlive(60);
   mqtt.setBufferSize(512);
