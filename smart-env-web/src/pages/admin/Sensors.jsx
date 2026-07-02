@@ -36,10 +36,10 @@ function MapClickHandler({ onLocationSelect }) {
   return null
 }
 
-function FlyToLocation({ lat, lng }) {
+function FlyToLocation({ lat, lng, enabled }) {
   const map = useMapEvents({})
   useEffect(() => {
-    if (lat && lng) map.flyTo([lat, lng], 15)
+    if (lat && lng && enabled) map.flyTo([lat, lng], 15)
   }, [lat, lng])
   return null
 }
@@ -129,7 +129,7 @@ function SensorModal({ sensor, onClose, onSave }) {
                   latitude: parseFloat(lat.toFixed(6)),
                   longitude: parseFloat(lng.toFixed(6))
                 }))} />
-                <FlyToLocation lat={form.latitude} lng={form.longitude} />
+                <FlyToLocation lat={form.latitude} lng={form.longitude} enabled={!sensor} />
                 {form.latitude && form.longitude && (
                   <Marker position={[form.latitude, form.longitude]} />
                 )}
