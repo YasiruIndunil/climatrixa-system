@@ -84,6 +84,8 @@ class SensorUpdate(BaseModel):
     )
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    is_active: Optional[bool] = None
+    mac_address: Optional[str] = None
 
 
 class SensorResponse(BaseModel):
@@ -98,6 +100,7 @@ class SensorResponse(BaseModel):
     updated_by: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    
 
 
 # ── Reading Schemas ────────────────────────────────────────────────────────────

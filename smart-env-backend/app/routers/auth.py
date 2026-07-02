@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.schemas import (
     RegisterRequest, LoginRequest, TokenResponse,
@@ -9,6 +11,17 @@ from app.core.database import db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+
+@router.get("/users", tags=["Auth"])
+async def list_users(current_user: dict = Depends(require_admin)):
+    """List all users — admin only"""
+    result = (
+        db.table("users")
+        .select("id, email, full_name, role, is_active, created_at")
+        .order("created_at")
+        .execute()
+    )
+    return result.data
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(
