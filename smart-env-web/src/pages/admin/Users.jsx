@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, UserCheck, UserX, Shield, User, Link } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, UserCheck, UserX, Shield, User, Link, Edit2 } from 'lucide-react'
 import api from '../../utils/api'
 
 function CreateUserModal({ onClose }) {
@@ -78,7 +78,6 @@ function CreateUserModal({ onClose }) {
 }
 
 function AssignModal({ user, onClose }) {
-  const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
 
   const { data: allSensors } = useQuery({
@@ -91,7 +90,10 @@ function AssignModal({ user, onClose }) {
     queryFn: () => api.get(`/access/users/${user.id}/sensors`).then(r => r.data),
   })
 
-  const assignedIds = new Set(assigned?.map(s => s.id) || [])
+  // Extract sensor IDs from nested response { sensors: { id, name... } }
+  const assignedIds = new Set(
+    assigned?.map(row => row.sensors?.id).filter(Boolean) || []
+  )
 
   const toggle = async (sensorId) => {
     setSaving(true)
@@ -111,9 +113,9 @@ function AssignModal({ user, onClose }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Assign sensors to {user.full_name}</h3>
+          <h3 className="font-semibold text-gray-800">Assign sensors — {user.full_name || user.email}</h3>
         </div>
-        <div className="px-6 py-4 space-y-2 max-h-80 overflow-y-auto">
+        <div className="px-6 py-4 space-y-2 max-h-72 overflow-y-auto">
           {allSensors?.filter(s => s.is_active).map(sensor => (
             <label key={sensor.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer">
               <input type="checkbox"
@@ -140,20 +142,114 @@ function AssignModal({ user, onClose }) {
   )
 }
 
+function EditUserModal({ user, onClose }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState({ 
+    full_name: user.full_name || '',
+    role: user.role 
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      // Update full name if changed
+      if (form.full_name !== user.full_name) {
+        await api.patch(`/auth/users/${user.id}`, { full_name: form.full_name })
+      }
+      // Update role if changed
+      if (form.role !== user.role) {
+        await api.patch(`/auth/users/${user.id}/role`, { role: form.role })
+      }
+      queryClient.invalidateQueries(['users'])
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update user')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Edit user — {user.email}</h3>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
+            <div className="flex gap-4">
+              {['public', 'admin'].map(r => (
+                <label key={r} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="role"
+                    defaultChecked={user.role === r}
+                    onChange={() => setForm({...form, role: r})} />
+                  <span className="text-sm capitalize">{r}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Full name</label>
+            <input
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+              value={form.full_name}
+              onChange={e => setForm({...form, full_name: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Reset password</label>
+            <input type="password" placeholder="Leave blank to keep current"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+              onChange={async (e) => {
+                if (e.target.value.length >= 8) {
+                  await api.patch(`/auth/users/${user.id}/reset-password`, { new_password: e.target.value })
+                }
+              }} />
+            <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
+          </div>
+          {error && <div className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</div>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-purple-700 hover:bg-purple-800 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Users() {
   const queryClient = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [assignUser, setAssignUser] = useState(null)
+  const [editUser, setEditUser] = useState(null)
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => api.get('/auth/users/').then(r => r.data),
   })
+  
 
   const toggleActive = async (user) => {
-    await api.patch(`/auth/users/${user.id}`, { is_active: !user.is_active })
-    queryClient.invalidateQueries(['users'])
+  const endpoint = user.is_active
+    ? `/auth/users/${user.id}/disable`
+    : `/auth/users/${user.id}/enable`
+  await api.patch(endpoint)
+  queryClient.invalidateQueries(['users'])
   }
+
+  
 
   if (isLoading) return <div className="p-6 text-gray-400">Loading users...</div>
 
@@ -194,6 +290,13 @@ export default function Users() {
               </span>
               <div className="flex items-center gap-1">
                 <button
+                  onClick={() => setEditUser(user)}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-500"
+                  title="Edit user"
+                >
+                  <Edit2 size={15} />
+                </button>
+                <button
                   onClick={() => setAssignUser(user)}
                   className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-purple-600"
                   title="Assign sensors"
@@ -215,6 +318,7 @@ export default function Users() {
 
       {createOpen && <CreateUserModal onClose={() => setCreateOpen(false)} />}
       {assignUser && <AssignModal user={assignUser} onClose={() => setAssignUser(null)} />}
+      {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} />}
     </div>
   )
 }

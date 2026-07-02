@@ -262,3 +262,22 @@ async def enable_user(user_id: str, admin: dict = Depends(require_admin)):
         )
 
     return {"message": "User account enabled", "user_id": user_id}
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    body: UpdateProfileRequest,
+    admin: dict = Depends(require_admin)
+):
+    """Admin updates another user's full name."""
+    result = db.table("users").update({
+        "full_name": body.full_name,
+        "updated_by": admin.get("sub"),
+        "updated_at": "NOW()",
+    }).eq("id", user_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return result.data[0]
