@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
+import { useAlertWS } from './Toast'
 import {
   LayoutDashboard, Wifi, Users, Bell, Download,
-  LogOut, Leaf, Settings, ChevronRight
+  LogOut, Leaf, WifiOff
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
 
 export default function AdminLayout() {
   const { user, logout } = useAuth()
+  const { connected } = useAlertWS()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -57,6 +59,19 @@ export default function AdminLayout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* Live connection status */}
+        <div className="px-4 py-2 mx-3 mb-2 rounded-lg bg-purple-800">
+          <div className="flex items-center gap-2">
+            {connected
+              ? <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              : <WifiOff size={12} className="text-red-400" />
+            }
+            <span className="text-xs text-purple-300">
+              {connected ? 'Live feed connected' : 'Reconnecting...'}
+            </span>
+          </div>
+        </div>
 
         {/* User info + logout */}
         <div className="px-3 py-4 border-t border-purple-800">
