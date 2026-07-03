@@ -46,9 +46,13 @@ function FlyToLocation({ lat, lng, enabled }) {
 
 function SensorModal({ sensor, onClose, onSave }) {
   const toast = useToast()
-  const [form, setForm] = useState(sensor || {
-    name: '', location: '', industry_profile: 'general',
-    latitude: 7.2085, longitude: 79.8358, mac_address: ''
+  const [form, setForm] = useState({
+    name: sensor?.name || '',
+    location: sensor?.location || '',
+    industry_profile: sensor?.industry_profile || 'general',
+    latitude: sensor?.latitude || 7.2085,
+    longitude: sensor?.longitude || 79.8358,
+    mac_address: sensor?.mac_address || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -166,6 +170,7 @@ function SensorModal({ sensor, onClose, onSave }) {
 
 export default function Sensors() {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [search, setSearch] = useState('')
@@ -186,8 +191,13 @@ export default function Sensors() {
   }
 
   const toggleSensor = async (sensor) => {
-    await api.patch(`/sensors/${sensor.id}`, { is_active: !sensor.is_active })
-    queryClient.invalidateQueries(['sensors'])
+    try {
+      await api.patch(`/sensors/${sensor.id}`, { is_active: !sensor.is_active })
+      queryClient.invalidateQueries(['sensors'])
+      toast(sensor.is_active ? 'Sensor deactivated' : 'Sensor activated')
+    } catch {
+      toast('Failed to update sensor status', 'error')
+    }
   }
 
   const filtered = sensors?.filter(s => {
