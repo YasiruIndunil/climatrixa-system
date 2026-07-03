@@ -1,10 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/useAuth'
 import { useAlertWS } from './Toast'
 import {
   LayoutDashboard, Wifi, Users, Bell, Download,
   LogOut, Leaf, WifiOff
 } from 'lucide-react'
+import api from '../utils/api'
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Overview', end: true },
@@ -19,19 +21,18 @@ export default function AdminLayout() {
   const { connected } = useAlertWS()
   const navigate = useNavigate()
 
+  const { data: unreadAlerts } = useQuery({
+    queryKey: ['unread-alerts'],
+    queryFn: () => api.get('/alerts/events').then(r =>
+      r.data.filter(a => !a.acknowledged).length
+    ),
+    refetchInterval: 30000,
+  })
+
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
-
-  const { data: unreadAlerts } = useQuery({
-  queryKey: ['unread-alerts'],
-  queryFn: () => api.get('/alerts/events?acknowledged=false').then(r => 
-    r.data.filter(a => !a.acknowledged).length
-  ),
-  refetchInterval: 30000,
-})
-
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -63,20 +64,14 @@ export default function AdminLayout() {
                 }`
               }
             >
-
-               <Bell size={18} />
-                {label}
-                {label === 'Alert Rules' && unreadAlerts > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadAlerts > 9 ? '9+' : unreadAlerts}
-                  </span>
-                )}
               <Icon size={18} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {label === 'Alert Rules' && unreadAlerts > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shrink-0">
+                  {unreadAlerts > 9 ? '9+' : unreadAlerts}
+                </span>
+              )}
             </NavLink>
-
-            
-            
           ))}
         </nav>
 
