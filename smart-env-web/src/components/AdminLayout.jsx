@@ -24,6 +24,15 @@ export default function AdminLayout() {
     navigate('/login')
   }
 
+  const { data: unreadAlerts } = useQuery({
+  queryKey: ['unread-alerts'],
+  queryFn: () => api.get('/alerts/events?acknowledged=false').then(r => 
+    r.data.filter(a => !a.acknowledged).length
+  ),
+  refetchInterval: 30000,
+})
+
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -54,9 +63,20 @@ export default function AdminLayout() {
                 }`
               }
             >
+
+               <Bell size={18} />
+                {label}
+                {label === 'Alert Rules' && unreadAlerts > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadAlerts > 9 ? '9+' : unreadAlerts}
+                  </span>
+                )}
               <Icon size={18} />
               {label}
             </NavLink>
+
+            
+            
           ))}
         </nav>
 

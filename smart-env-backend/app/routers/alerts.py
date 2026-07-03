@@ -60,3 +60,21 @@ async def list_alert_events(sensor_id: str = None, limit: int = 50):
     Public endpoint — admins and public users can view.
     """
     return get_alert_events(sensor_id=sensor_id, limit=limit)
+
+
+@router.patch("/events/{event_id}/acknowledge")
+async def acknowledge_alert(
+    event_id: str,
+    current_user: dict = Depends(require_admin)
+):
+    """Admin acknowledges an alert event."""
+    result = db.table("alert_events").update({
+        "acknowledged": True,
+        "acknowledged_at": "NOW()",
+        "acknowledged_by": current_user.get("sub")
+    }).eq("id", event_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Alert event not found")
+
+    return result.data[0]

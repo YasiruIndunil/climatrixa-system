@@ -21,6 +21,8 @@ function Tooltip({ text, children }) {
   )
 }
 
+
+
 function RuleModal({ onClose }) {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -113,6 +115,15 @@ export default function Alerts() {
     !eventSearch || e.message?.toLowerCase().includes(eventSearch.toLowerCase())
   )
 
+  const acknowledgeAlert = async (eventId) => {
+  try {
+    await api.patch(`/alerts/events/${eventId}/acknowledge`)
+    queryClient.invalidateQueries(['alert-events'])
+    toast('Alert acknowledged')
+  } catch {
+    toast('Failed to acknowledge alert', 'error')
+  }
+  }
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -173,15 +184,38 @@ export default function Alerts() {
         </div>
         <div className="divide-y divide-gray-50">
           {filteredEvents?.slice(0, 20).map(event => (
-            <div key={event.id} className="px-5 py-3 flex items-start gap-3">
-              <AlertTriangle size={15} className="text-orange-500 mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <div className="text-sm text-gray-800">{event.message}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{event.triggered_at}</div>
-              </div>
-              <div className="text-xs text-gray-500 shrink-0">Value: <strong>{event.actual_value}</strong></div>
-            </div>
-          )) ?? <div className="px-5 py-8 text-center text-gray-400 text-sm">No alerts yet</div>}
+                <div key={event.id} className={`px-5 py-3 flex items-start gap-3 ${
+                  !event.acknowledged ? 'bg-orange-50' : ''
+                }`}>
+                  <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${
+                    event.acknowledged ? 'text-gray-400' : 'text-orange-500'
+                  }`} />
+                  <div className="flex-1">
+                    <div className={`text-sm ${event.acknowledged ? 'text-gray-400' : 'text-gray-800'}`}>
+                      {event.message}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">{event.triggered_at}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-xs text-gray-500">
+                      Value: <strong>{event.actual_value}</strong>
+                    </div>
+                    {!event.acknowledged && (
+                      <button
+                        onClick={() => acknowledgeAlert(event.id)}
+                        className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded-lg font-medium transition-colors"
+                      >
+                        Acknowledge
+                      </button>
+                    )}
+                    {event.acknowledged && (
+                      <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-lg font-medium">
+                        ✓ Acknowledged
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
         </div>
       </div>
 

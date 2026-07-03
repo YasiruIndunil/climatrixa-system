@@ -6,6 +6,7 @@ Checks the reading against all active alert rules for that sensor.
 If a threshold is exceeded, logs an alert_event to Supabase.
 """
 from app.core.database import db
+from app.routers.readings import manager
 
 
 # What field of the reading does each alert_type check?
@@ -59,21 +60,38 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
         )
 
         if triggered:
-            unit = UNIT_MAP.get(field, "")
-            direction_word = "exceeded" if direction == "gt" else "dropped below"
-            message = (
-                f"{field.capitalize()} {direction_word} threshold: "
-                f"{actual:.1f}{unit} (limit: {threshold:.1f}{unit})"
+            # Only re-trigger if last alert was acknowledged
+            # Prevents flooding while ensuring admin sees every alert
+            recent_unacknowledged = (
+                db.table("alert_events")
+                .select("id")
+                .eq("sensor_id", sensor_id)
+                .eq("alert_type", alert_type)
+                .eq("acknowledged", False)
+                .execute()
             )
+            if recent_unacknowledged.data:
+                continue  # Unacknowledged alert exists — don't create another
 
-            # Log the alert event
-            db.table("alert_events").insert({
+           # Log the alert event
+            result = db.table("alert_events").insert({
                 "sensor_id":       sensor_id,
                 "alert_type":      alert_type,
                 "actual_value":    actual,
                 "threshold_value": threshold,
                 "message":         message,
             }).execute()
+
+            # Broadcast to all connected WebSocket clients (React dashboard)
+            if result.data:
+                import asyncio
+                try:
+                    await manager.broadcast({
+                        "event": "alert_triggered",
+                        "data": result.data[0]
+                    })
+                except Exception:
+                    pass
 
             # TODO: Add email notification here using SendGrid or Resend (both free tier)
             # await send_alert_email(rule["notify_email"], message)
