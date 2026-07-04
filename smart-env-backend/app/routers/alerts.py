@@ -78,3 +78,5 @@ async def acknowledge_alert(
         raise HTTPException(status_code=404, detail="Alert event not found")
 
     return result.data[0]
+
+
