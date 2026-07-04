@@ -8,13 +8,16 @@ Device identity resolved via MAC address lookup in sensors table.
 """
 import json
 import ssl
+import asyncio
 import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
+from app.services.alert_service import check_and_trigger_alerts
 
 settings = get_settings()
 
 _client: mqtt.Client | None = None
+_event_loop = None  # shared event loop for running async functions from sync context
 
 BRAND_KEY = "climatrixa-secret-2026"  # must match firmware
 
@@ -32,7 +35,7 @@ def _on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
 
-        # ── Step 1: Validate brand key (proves it's our product) ──
+        # ── Step 1: Validate brand key ────────────────────────────
         if payload.get("brand_key") != BRAND_KEY:
             print(f"[MQTT] Rejected — invalid brand key")
             return
@@ -68,16 +71,31 @@ def _on_message(client, userdata, msg):
             "aqi":         payload["aqi"],
             "pressure":    payload.get("pressure"),
         }
-        # Use ESP32 NTP timestamp if provided (accurate for buffered readings)
         if payload.get("recorded_at"):
             insert_data["recorded_at"] = payload["recorded_at"]
 
-        db.table("readings").insert(insert_data).execute()
+        result = db.table("readings").insert(insert_data).execute()
+        reading = result.data[0] if result.data else insert_data
 
         print(f"[MQTT] Saved reading from MAC {mac} "
               f"(sensor: {sensor_id[:8]}...) "
               f"temp={payload['temperature']}°C "
               f"aqi={payload['aqi']}")
+
+        # ── Step 4: Check alert rules ─────────────────────────────
+        # _on_message is a sync callback — run async alert check
+        # using the shared event loop from the main FastAPI thread
+        global _event_loop
+        if _event_loop and _event_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                check_and_trigger_alerts(sensor_id, reading),
+                _event_loop
+            )
+        else:
+            # Fallback: create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(check_and_trigger_alerts(sensor_id, reading))
+            loop.close()
 
     except Exception as e:
         print(f"[MQTT] Error processing message: {e}")
@@ -96,7 +114,13 @@ def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=N
 
 
 def start_mqtt_listener():
-    global _client
+    global _client, _event_loop
+
+    # Capture the running event loop from FastAPI's async context
+    try:
+        _event_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        _event_loop = None
 
     _client = mqtt.Client(
         client_id="climatrixa-backend-prod",
