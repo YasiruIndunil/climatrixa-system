@@ -10,75 +10,72 @@ from app.core.timezone import utc_to_slst, format_slst
 router = APIRouter(prefix="/readings", tags=["Readings"])
 
 # ── WebSocket connection manager ──────────────────────────────────────────────
+from app.core.ws_manager import manager
 
-class ConnectionManager:
-    """Keeps track of all live WebSocket clients."""
-    def __init__(self):
-        self.active: list[WebSocket] = []
-
-    async def connect(self, ws: WebSocket):
-        await ws.accept()
-        self.active.append(ws)
-
-    def disconnect(self, ws: WebSocket):
-        if ws in self.active:
-            self.active.remove(ws)
-
-    async def broadcast(self, message: dict):
-        """Send a message to all connected WebSocket clients."""
-        payload = json.dumps(message, default=str)
-        dead = []
-        for ws in self.active:
-            try:
-                await ws.send_text(payload)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
-
-
-manager = ConnectionManager()
 
 
 # ── HTTP endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=ReadingResponse, status_code=201)
 async def store_reading(body: ReadingCreate):
-    # Validate brand key
-    if body.brand_key != "climatrixa-secret-2026":
-        raise HTTPException(status_code=401, detail="Invalid brand key")
+    """
+    Store a new sensor reading sent by an ESP32.
+    The ESP32 sends its api_key for authentication (no JWT needed on the device).
 
-    # Look up sensor by MAC address
+    Example ESP32 payload:
+    {
+        "sensor_id": "uuid-here",
+        "temperature": 28.5,
+        "humidity": 62.3,
+        "aqi": 45.0,
+        "pressure": 1013.2,
+        "api_key": "your-device-api-key"
+    }
+    """
+    # Validate the device API key
     sensor = (
         db.table("sensors")
         .select("id, is_active")
-        .eq("mac_address", body.mac.upper())
+        .eq("id", body.sensor_id)
+        .eq("api_key", body.api_key)
         .execute()
     )
     if not sensor.data:
-        raise HTTPException(status_code=404, detail="MAC address not registered")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid sensor_id or api_key"
+        )
     if not sensor.data[0]["is_active"]:
-        raise HTTPException(status_code=403, detail="Sensor is inactive")
-
-    sensor_id = sensor.data[0]["id"]
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sensor is inactive"
+        )
 
     # Save the reading
     insert_data = {
-        "sensor_id":   sensor_id,
+        "sensor_id": body.sensor_id,
         "temperature": body.temperature,
-        "humidity":    body.humidity,
-        "aqi":         body.aqi,
-        "pressure":    body.pressure,
+        "humidity": body.humidity,
+        "aqi": body.aqi,
+        "pressure": body.pressure,
     }
     if body.recorded_at:
         insert_data["recorded_at"] = body.recorded_at
 
     result = db.table("readings").insert(insert_data).execute()
+
     reading = result.data[0]
 
-    await manager.broadcast({"event": "new_reading", "data": reading})
-    await check_and_trigger_alerts(sensor_id, reading)
+    # Broadcast to all live WebSocket clients (Flutter app, web dashboard)
+    await manager.broadcast({
+        "event": "new_reading",
+        "data": reading
+    })
 
+    # Check alert thresholds and fire alerts if needed
+    await check_and_trigger_alerts(body.sensor_id, reading)
+
+    # Add local time fields to response
     recorded_utc = datetime.fromisoformat(
         reading["recorded_at"].replace("Z", "+00:00")
     )

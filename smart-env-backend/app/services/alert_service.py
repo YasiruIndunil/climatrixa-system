@@ -6,7 +6,7 @@ Checks the reading against all active alert rules for that sensor.
 If a threshold is exceeded, logs an alert_event to Supabase.
 """
 from app.core.database import db
-from app.routers.readings import manager
+from app.core.ws_manager import manager
 
 
 # What field of the reading does each alert_type check?
