@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit2, ToggleLeft, ToggleRight, MapPin, Wifi, Search } from 'lucide-react'
+import { Plus, Edit2, ToggleLeft, ToggleRight, MapPin, Radio, Search, X } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import api from '../../utils/api'
+import { useTheme } from '../../context/ThemeContext'
 import { useToast } from '../../components/Toast'
+import PageWrapper, { Card, CardHeader, PageTitle, ThemedInput, ThemedSelect, PrimaryButton, GhostButton, FieldLabel, Tooltip } from '../../components/PageWrapper'
+import api from '../../utils/api'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -13,23 +15,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
-
-function Tooltip({ text, children }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div className="relative inline-block"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}>
-      {children}
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-50">
-          {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-        </div>
-      )}
-    </div>
-  )
-}
 
 function MapClickHandler({ onLocationSelect }) {
   useMapEvents({ click(e) { onLocationSelect(e.latlng.lat, e.latlng.lng) } })
@@ -45,7 +30,7 @@ function FlyToLocation({ lat, lng, enabled }) {
 }
 
 function SensorModal({ sensor, onClose, onSave }) {
-  const toast = useToast()
+  const { dark } = useTheme()
   const [form, setForm] = useState({
     name: sensor?.name || '',
     location: sensor?.location || '',
@@ -57,12 +42,12 @@ function SensorModal({ sensor, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const industryProfiles = ['general','spice_factory','supermarket','hospital','office','warehouse','cold_storage']
+  const profiles = ['general','spice_factory','supermarket','hospital','office','warehouse','cold_storage']
 
   useEffect(() => {
     if (!sensor && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setForm(f => ({
+        pos => setForm(f => ({
           ...f,
           latitude: parseFloat(pos.coords.latitude.toFixed(6)),
           longitude: parseFloat(pos.coords.longitude.toFixed(6))
@@ -73,94 +58,98 @@ function SensorModal({ sensor, onClose, onSave }) {
     }
   }, [])
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
       await onSave(form)
-      toast(sensor ? 'Sensor updated' : 'Sensor registered successfully')
       onClose()
     } catch (err) {
-      toast(err.response?.data?.detail || 'Failed to save sensor', 'error')
       setError(err.response?.data?.detail || 'Failed to save sensor')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl my-4">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">{sensor ? 'Edit sensor' : 'Register new sensor'}</h3>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className={`w-full max-w-lg rounded-2xl shadow-2xl my-4 border ${
+        dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
+      }`}>
+        <div className={`px-6 py-5 border-b flex items-center justify-between ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+          <div>
+            <h3 className={`font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
+              {sensor ? 'Edit sensor' : 'Register new sensor'}
+            </h3>
+            <p className={`text-xs mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
+              {sensor ? 'Update sensor details' : 'Add a new sensor node to the system'}
+            </p>
+          </div>
+          <button onClick={onClose} className={`p-1.5 rounded-lg ${dark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-400'}`}>
+            <X size={16} />
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Sensor name</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-              value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+            <FieldLabel>Sensor name</FieldLabel>
+            <ThemedInput value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Sensor Alpha" required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Location description</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-              value={form.location} onChange={e => setForm({...form, location: e.target.value})} required />
+            <FieldLabel>Location description</FieldLabel>
+            <ThemedInput value={form.location} onChange={e => setForm({...form, location: e.target.value})} placeholder="e.g. Factory Floor A, Colombo" required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">MAC address</label>
-            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+            <FieldLabel>MAC address</FieldLabel>
+            <ThemedInput
+              value={form.mac_address}
+              onChange={e => setForm({...form, mac_address: e.target.value.toUpperCase()})}
               placeholder="AA:BB:CC:DD:EE:FF"
-              value={form.mac_address} onChange={e => setForm({...form, mac_address: e.target.value.toUpperCase()})} />
+              className="font-mono"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Industry profile</label>
-            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-              value={form.industry_profile} onChange={e => setForm({...form, industry_profile: e.target.value})}>
-              {industryProfiles.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
-            </select>
+            <FieldLabel>Industry profile</FieldLabel>
+            <ThemedSelect value={form.industry_profile} onChange={e => setForm({...form, industry_profile: e.target.value})}>
+              {profiles.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
+            </ThemedSelect>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              GPS location — click map to place pin
-            </label>
-            <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: 200 }}>
-              <MapContainer center={[form.latitude || 7.2085, form.longitude || 79.8358]} zoom={13}
-                style={{ height: '100%', width: '100%' }}>
-                <TileLayer attribution='© OpenStreetMap contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <FieldLabel>GPS location — click map to place pin</FieldLabel>
+            <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: 200 }}>
+              <MapContainer center={[form.latitude || 7.2085, form.longitude || 79.8358]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                <TileLayer attribution='© OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapClickHandler onLocationSelect={(lat, lng) => setForm(f => ({
                   ...f,
                   latitude: parseFloat(lat.toFixed(6)),
                   longitude: parseFloat(lng.toFixed(6))
                 }))} />
                 <FlyToLocation lat={form.latitude} lng={form.longitude} enabled={!sensor} />
-                {form.latitude && form.longitude && (
-                  <Marker position={[form.latitude, form.longitude]} />
-                )}
+                {form.latitude && form.longitude && <Marker position={[form.latitude, form.longitude]} />}
               </MapContainer>
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Latitude</label>
-                <input type="number" step="any" className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={form.latitude} onChange={e => setForm({...form, latitude: parseFloat(e.target.value)})} />
+                <label className={`text-xs mb-1 block ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Latitude</label>
+                <ThemedInput type="number" step="any" value={form.latitude} onChange={e => setForm({...form, latitude: parseFloat(e.target.value)})} className="py-1.5 text-xs" />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Longitude</label>
-                <input type="number" step="any" className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={form.longitude} onChange={e => setForm({...form, longitude: parseFloat(e.target.value)})} />
+                <label className={`text-xs mb-1 block ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Longitude</label>
+                <ThemedInput type="number" step="any" value={form.longitude} onChange={e => setForm({...form, longitude: parseFloat(e.target.value)})} className="py-1.5 text-xs" />
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Click the map or type coordinates manually</p>
           </div>
-          {error && <div className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</div>}
+
+          {error && (
+            <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl border border-red-200 dark:border-red-800">
+              {error}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-purple-700 hover:bg-purple-800 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50">
-              {saving ? 'Saving...' : 'Save sensor'}
-            </button>
+            <GhostButton type="button" onClick={onClose} className="flex-1 justify-center">Cancel</GhostButton>
+            <PrimaryButton type="submit" disabled={saving} className="flex-1 justify-center">
+              {saving ? 'Saving...' : sensor ? 'Save changes' : 'Register sensor'}
+            </PrimaryButton>
           </div>
         </form>
       </div>
@@ -169,6 +158,7 @@ function SensorModal({ sensor, onClose, onSave }) {
 }
 
 export default function Sensors() {
+  const { dark } = useTheme()
   const queryClient = useQueryClient()
   const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
@@ -181,22 +171,24 @@ export default function Sensors() {
     queryFn: () => api.get('/sensors/').then(r => r.data),
   })
 
-  const saveSensor = async (form) => {
+  const saveSensor = async form => {
     if (editing) {
       await api.patch(`/sensors/${editing.id}`, form)
+      toast('Sensor updated successfully')
     } else {
       await api.post('/sensors/', form)
+      toast('Sensor registered successfully')
     }
     queryClient.invalidateQueries(['sensors'])
   }
 
-  const toggleSensor = async (sensor) => {
+  const toggleSensor = async sensor => {
     try {
       await api.patch(`/sensors/${sensor.id}`, { is_active: !sensor.is_active })
       queryClient.invalidateQueries(['sensors'])
       toast(sensor.is_active ? 'Sensor deactivated' : 'Sensor activated')
     } catch {
-      toast('Failed to update sensor status', 'error')
+      toast('Failed to update sensor', 'error')
     }
   }
 
@@ -210,101 +202,118 @@ export default function Sensors() {
     return matchSearch && matchStatus
   })
 
-  if (isLoading) return <div className="p-6 text-gray-400">Loading sensors...</div>
+  if (isLoading) return (
+    <PageWrapper>
+      <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Loading sensors...</div>
+    </PageWrapper>
+  )
 
   return (
-    <div className="p-6">
+    <PageWrapper>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Sensors</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {filtered?.length ?? 0} of {sensors?.length ?? 0} sensors
-          </p>
-        </div>
+        <PageTitle
+          title="Sensors"
+          subtitle={`${filtered?.length ?? 0} of ${sensors?.length ?? 0} sensor nodes`}
+        />
         <Tooltip text="Register a new sensor node">
-          <button onClick={() => { setEditing(null); setModalOpen(true) }}
-            className="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-lg text-sm font-medium">
+          <PrimaryButton onClick={() => { setEditing(null); setModalOpen(true) }}>
             <Plus size={16} /> Add sensor
-          </button>
+          </PrimaryButton>
         </Tooltip>
       </div>
 
       {/* Search + filter */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-5">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
-          <input
-            className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+          <Search size={14} className={`absolute left-3 top-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
+          <ThemedInput
+            className="pl-9"
             placeholder="Search by name, location or MAC address..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <select
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-          value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <ThemedSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-36">
           <option value="all">All status</option>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
-        </select>
+        </ThemedSelect>
       </div>
 
-      <div className="grid gap-4">
+      {/* Sensor cards */}
+      <div className="grid gap-3">
         {filtered?.length === 0 && (
-          <div className="bg-white rounded-xl p-8 text-center text-gray-400 text-sm border border-gray-100">
-            No sensors match your search
-          </div>
+          <Card className="p-10 text-center">
+            <Radio size={32} className={`mx-auto mb-2 ${dark ? 'text-gray-700' : 'text-gray-200'}`} />
+            <p className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>No sensors match your search</p>
+          </Card>
         )}
         {filtered?.map(sensor => (
-          <div key={sensor.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <Card key={sensor.id} className="p-5">
             <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${sensor.is_active ? 'bg-teal-100' : 'bg-gray-100'}`}>
-                  <Wifi size={18} className={sensor.is_active ? 'text-teal-600' : 'text-gray-400'} />
+              <div className="flex items-start gap-4">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  sensor.is_active
+                    ? dark ? 'bg-teal-500/10 border border-teal-500/20' : 'bg-teal-50 border border-teal-100'
+                    : dark ? 'bg-gray-800 border border-gray-700' : 'bg-gray-100 border border-gray-200'
+                }`}>
+                  <Radio size={18} className={sensor.is_active ? 'text-teal-500' : dark ? 'text-gray-600' : 'text-gray-400'} />
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-800">{sensor.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                  <div className={`font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>{sensor.name}</div>
+                  <div className={`flex items-center gap-1 text-xs mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
                     <MapPin size={11} /> {sensor.location}
                   </div>
-                  <div className="text-xs text-gray-400 mt-0.5 font-mono">
-                    {sensor.mac_address || 'MAC not set'}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    Profile: {sensor.industry_profile?.replace(/_/g, ' ')}
-                  </div>
-                  {sensor.latitude && sensor.longitude && (
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      GPS: {sensor.latitude}, {sensor.longitude}
+                  {sensor.mac_address && (
+                    <div className={`text-xs mt-0.5 font-mono ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {sensor.mac_address}
                     </div>
                   )}
+                  <div className={`text-xs mt-0.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
+                    {sensor.industry_profile?.replace(/_/g, ' ')}
+                    {sensor.latitude && sensor.longitude && ` · ${sensor.latitude}, ${sensor.longitude}`}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sensor.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {sensor.is_active ? 'Active' : 'Inactive'}
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  sensor.is_active
+                    ? dark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'
+                    : dark ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {sensor.is_active ? '● Active' : '○ Inactive'}
                 </span>
-                <Tooltip text="Edit sensor details">
+                <Tooltip text="Edit sensor">
                   <button onClick={() => { setEditing(sensor); setModalOpen(true) }}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600">
+                    className={`p-2 rounded-xl transition-colors ${dark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}>
                     <Edit2 size={15} />
                   </button>
                 </Tooltip>
                 <Tooltip text={sensor.is_active ? 'Deactivate sensor' : 'Activate sensor'}>
                   <button onClick={() => toggleSensor(sensor)}
-                    className={`p-1.5 rounded-lg ${sensor.is_active ? 'text-teal-600 hover:bg-teal-50' : 'text-gray-400 hover:bg-gray-100'}`}>
-                    {sensor.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                    className={`p-2 rounded-xl transition-colors ${
+                      sensor.is_active
+                        ? dark ? 'hover:bg-teal-500/10 text-teal-500' : 'hover:bg-teal-50 text-teal-600'
+                        : dark ? 'hover:bg-gray-800 text-gray-500' : 'hover:bg-gray-100 text-gray-400'
+                    }`}>
+                    {sensor.is_active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
                   </button>
                 </Tooltip>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {modalOpen && (
-        <SensorModal sensor={editing} onClose={() => setModalOpen(false)} onSave={saveSensor} />
+        <SensorModal
+          sensor={editing}
+          onClose={() => setModalOpen(false)}
+          onSave={saveSensor}
+        />
       )}
-    </div>
+    </PageWrapper>
   )
 }
