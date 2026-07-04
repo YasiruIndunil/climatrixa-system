@@ -183,6 +183,9 @@ class AlertEventResponse(BaseModel):
     threshold_value: float
     message: str
     triggered_at: datetime
+    acknowledged: bool = False
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[str] = None
 
 
 # ── User sensor access schemas ─────────────────────────────────────────────────

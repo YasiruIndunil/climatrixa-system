@@ -52,7 +52,7 @@ async def delete_alert_rule(rule_id: str, admin: dict = Depends(require_admin)):
     return None
 
 
-@router.get("/events", response_model=List[AlertEventResponse])
+@router.get("/events")
 async def list_alert_events(sensor_id: str = None, limit: int = 50):
     """
     Get recent alert events (triggered alerts log).
