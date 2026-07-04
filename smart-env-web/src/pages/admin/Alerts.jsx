@@ -413,26 +413,25 @@ export default function Alerts() {
   }
 
   const acknowledgeAlert = async (eventId) => {
-  // Optimistically update UI immediately
+  // Optimistic update
   queryClient.setQueryData(['alert-events'], (old) =>
     old?.map(e => e.id === eventId ? { ...e, acknowledged: true } : e)
-  )
-  queryClient.setQueryData(['unread-alerts'], (old) =>
-    typeof old === 'number' ? Math.max(0, old - 1) : old
   )
 
   try {
     await api.patch(`/alerts/events/${eventId}/acknowledge`)
-    // Refresh from server after success
-    queryClient.invalidateQueries({ queryKey: ['alert-events'] })
-    queryClient.invalidateQueries({ queryKey: ['unread-alerts'] })
     toast('Alert acknowledged ✓')
+    // Force refetch after short delay to sync with server
+    setTimeout(() => {
+      queryClient.refetchQueries({ queryKey: ['alert-events'] })
+      queryClient.refetchQueries({ queryKey: ['unread-alerts'] })
+    }, 500)
   } catch (err) {
-    // Revert on failure
+    // Revert optimistic update on failure
     queryClient.invalidateQueries({ queryKey: ['alert-events'] })
-    toast(err.response?.data?.detail || 'Failed to acknowledge alert', 'error')
+    toast(err.response?.data?.detail || 'Failed to acknowledge', 'error')
   }
-  }
+}
 
   const unreadCount = events?.filter(e => !e.acknowledged).length ?? 0
 
