@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Bell, AlertTriangle, Search, X, CheckCheck, Clock, MapPin } from 'lucide-react'
 import { useToast } from '../../components/Toast'
 import api from '../../utils/api'
+import { useTheme } from '../../context/ThemeContext'
+
+// Then use dark ? 'dark classes' : 'light classes' on containers
 
 const ALERT_TYPES = ['temperature_high','temperature_low','humidity_high','humidity_low','aqi_high','pressure_high','pressure_low']
 
@@ -136,9 +139,21 @@ function EmergencyPopup({ event, sensors, onDismiss, onAcknowledge }) {
             </div>
           </div>
 
-          {/* Time */}
-          <div className={`flex items-center gap-1.5 text-xs ${color.time} mb-4`}>
-            <Clock size={12} /> {localTime}
+          {/* Time + Map link */}
+          <div className="flex items-center justify-between mb-4">
+            <div className={`flex items-center gap-1.5 text-xs ${color.time}`}>
+              <Clock size={12} /> {localTime}
+            </div>
+            {sensor?.latitude && sensor?.longitude && (
+              
+                href={`https://www.google.com/maps?q=${sensor.latitude},${sensor.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 bg-white/50 px-2 py-1 rounded-lg"
+              >
+                <MapPin size={11} /> View location
+              </a>
+            )}
           </div>
 
           {/* Actions */}
@@ -345,9 +360,21 @@ function AlertEventCard({ event, sensors, onAcknowledge }) {
             </div>
           </div>
 
-          {/* Time */}
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <Clock size={11} /> {localTime}
+          {/* Time + Map link */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <Clock size={11} /> {localTime}
+            </div>
+            {sensor?.latitude && sensor?.longitude && (
+              
+                href={`https://www.google.com/maps?q=${sensor.latitude},${sensor.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium"
+              >
+                <MapPin size={11} /> View on map
+              </a>
+            )}
           </div>
         </div>
 
