@@ -1,11 +1,13 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/useAuth'
 import { useAlertWS } from './Toast'
+import { useEffect, useState } from 'react'
+import { X, CheckCheck, AlertTriangle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import {
   LayoutDashboard, Radio, Users, Bell, Download,
-  LogOut, Leaf, WifiOff, Sun, Moon, AlertTriangle
+  LogOut, Leaf, WifiOff, Sun, Moon
 } from 'lucide-react'
 import api from '../utils/api'
 
@@ -17,11 +19,92 @@ const navItems = [
   { to: '/admin/export', icon: Download, label: 'Export' },
 ]
 
+
+function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
+  const [countdown, setCountdown] = useState(30)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { clearInterval(timer); onDismiss(); return 0 }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
+  const borderColor = isHigh ? 'border-red-400' : 'border-orange-400'
+  const barColor = isHigh ? 'bg-red-500' : 'bg-orange-500'
+  const ackColor = isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onDismiss} />
+      <div className={`relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border-2 ${borderColor} bg-white`}>
+        <div className={`h-2 w-full ${barColor} animate-pulse`} />
+        <div className="px-6 py-5">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl ${isHigh ? 'bg-red-100' : 'bg-orange-100'} flex items-center justify-center animate-bounce text-2xl`}>
+                {event.alert_type?.includes('temperature') ? '🌡️' : event.alert_type?.includes('humidity') ? '💧' : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'}
+              </div>
+              <div>
+                <div className={`text-xs font-bold uppercase tracking-widest ${isHigh ? 'text-red-500' : 'text-orange-500'} mb-0.5`}>🚨 Emergency Alert</div>
+                <div className={`text-lg font-bold ${isHigh ? 'text-red-900' : 'text-orange-900'}`}>
+                  {event.alert_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </div>
+              </div>
+            </div>
+            <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+          </div>
+
+          <div className="bg-gray-50 rounded-xl p-4 mb-4">
+            <p className="text-sm text-gray-700 mb-3">{event.message}</p>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${isHigh ? 'text-red-600' : 'text-orange-600'}`}>{event.actual_value?.toFixed(1)}</div>
+                <div className="text-xs text-gray-400">Actual</div>
+              </div>
+              <div className="text-2xl text-gray-300">→</div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-400">{event.threshold_value?.toFixed(1)}</div>
+                <div className="text-xs text-gray-400">Limit</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button onClick={onDismiss}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${isHigh ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-orange-200 text-orange-600 hover:bg-orange-50'}`}>
+              Dismiss
+            </button>
+            <button onClick={() => { onAcknowledge(event.id); onDismiss() }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 ${ackColor}`}>
+              <CheckCheck size={15} /> Acknowledge
+            </button>
+          </div>
+
+          <div className="mt-3 text-center">
+            <div className={`text-xs ${isHigh ? 'text-red-400' : 'text-orange-400'}`}>Auto-dismissing in {countdown}s</div>
+            <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
+              <div className={`h-1 rounded-full ${barColor} transition-all duration-1000`}
+                style={{ width: (countdown / 30 * 100) + '%' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 export default function AdminLayout() {
   const { user, logout } = useAuth()
   const { connected } = useAlertWS()
   const { dark, toggle } = useTheme()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data: unreadCount } = useQuery({
     queryKey: ['unread-alerts'],
@@ -35,6 +118,32 @@ export default function AdminLayout() {
     logout()
     navigate('/login')
   }
+
+  const [emergencyEvent, setEmergencyEvent] = useState(null)
+  const [seenEventIds, setSeenEventIds] = useState(new Set())
+
+  const { data: events } = useQuery({
+    queryKey: ['alert-events'],
+    queryFn: () => api.get('/alerts/events').then(r => r.data),
+    refetchInterval: 15000,
+  })
+
+  const acknowledgeGlobal = async eventId => {
+    try {
+      await api.patch('/alerts/events/' + eventId + '/acknowledge')
+      queryClient.invalidateQueries({ queryKey: ['alert-events'] })
+      queryClient.invalidateQueries({ queryKey: ['unread-alerts'] })
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (!events) return
+    const newUnread = events.find(e => !e.acknowledged && !seenEventIds.has(e.id))
+    if (newUnread && !emergencyEvent) {
+      setEmergencyEvent(newUnread)
+      setSeenEventIds(prev => new Set([...prev, newUnread.id]))
+    }
+  }, [events])
 
   return (
     <div className={`flex h-screen ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
@@ -152,6 +261,15 @@ export default function AdminLayout() {
       <main className={`flex-1 overflow-auto ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
         <Outlet />
       </main>
+
+      {/* Global emergency alert popup */}
+      {emergencyEvent && (
+        <GlobalAlertPopup
+          event={emergencyEvent}
+          onDismiss={() => setEmergencyEvent(null)}
+          onAcknowledge={acknowledgeGlobal}
+        />
+      )}
     </div>
   )
 }
