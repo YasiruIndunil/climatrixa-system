@@ -17,12 +17,6 @@ const PARAMS = [
   { key: 'pressure',    label: 'Pressure',    icon: Gauge,          color: 'purple', unit: ' hPa' },
 ]
 
-const ALERT_TYPES_FOR_PARAM = {
-  temperature: ['temperature_high', 'temperature_low'],
-  humidity:    ['humidity_high',    'humidity_low'],
-  aqi:         ['aqi_high'],
-  pressure:    ['pressure_high',   'pressure_low'],
-}
 
 function AQIBadge({ status }) {
   const map = { Good: 'bg-green-100 text-green-700', Moderate: 'bg-yellow-100 text-yellow-700', Unhealthy: 'bg-red-100 text-red-700', Hazardous: 'bg-gray-800 text-white' }
@@ -57,11 +51,22 @@ export default function SensorDetail() {
   })
   const reading = readings?.find(r => r.sensor_id === sensorId)
 
-  // Alert subscriptions for this sensor
-  const { data: subscriptions, refetch: refetchSubs } = useQuery({
+  // Alert subscriptions — backend: GET /subscriptions/{user_id}/{sensor_id}
+  // Returns: { temperature: bool, humidity: bool, aqi: bool, pressure: bool }
+  const { data: subscription, refetch: refetchSubs } = useQuery({
     queryKey: ['subscriptions', sensorId, user?.id],
-    queryFn: () => api.get(`/alerts/subscriptions/?sensor_id=${sensorId}`).then(r => r.data),
+    queryFn: async () => {
+      try {
+        const r = await api.get(`/subscriptions/${user.id}/${sensorId}`)
+        return r.data
+      } catch (err) {
+        // 404 means no subscription record yet — return nulls so we show all as off
+        if (err.response?.status === 404) return null
+        throw err
+      }
+    },
     enabled: !!sensorId && !!user?.id,
+    retry: false,
   })
 
   // AI Forecast
@@ -80,26 +85,34 @@ export default function SensorDetail() {
   })
   const sensorAlerts = (alertEvents || []).filter(e => e.sensor_id === sensorId).slice(0, 10)
 
+  // subscription is { temperature: bool, humidity: bool, aqi: bool, pressure: bool } or null
   const isSubscribed = (paramKey) => {
-    if (!subscriptions) return false
-    const types = ALERT_TYPES_FOR_PARAM[paramKey] || []
-    return subscriptions.some(s => types.includes(s.alert_type) && s.is_active)
+    if (!subscription) return false
+    return subscription[paramKey] === true
   }
 
   const toggleSubscription = async (paramKey) => {
     setTogglingParam(paramKey)
-    const types = ALERT_TYPES_FOR_PARAM[paramKey] || []
     const currently = isSubscribed(paramKey)
     try {
-      for (const alert_type of types) {
-        if (currently) {
-          await api.patch(`/alerts/subscriptions/`, { sensor_id: sensorId, alert_type, is_active: false })
-        } else {
-          await api.post(`/alerts/subscriptions/`, { sensor_id: sensorId, alert_type, is_active: true })
-        }
+      if (subscription) {
+        // Record exists — PATCH to update the one parameter
+        await api.patch(`/subscriptions/${user.id}/${sensorId}`, {
+          temperature: paramKey === 'temperature' ? !currently : (subscription.temperature ?? false),
+          humidity:    paramKey === 'humidity'    ? !currently : (subscription.humidity    ?? false),
+          aqi:         paramKey === 'aqi'         ? !currently : (subscription.aqi         ?? false),
+          pressure:    paramKey === 'pressure'    ? !currently : (subscription.pressure    ?? false),
+        })
+      } else {
+        // No record yet — POST to create with this one parameter enabled
+        await api.post(`/subscriptions/${user.id}/${sensorId}`, {
+          temperature: paramKey === 'temperature',
+          humidity:    paramKey === 'humidity',
+          aqi:         paramKey === 'aqi',
+          pressure:    paramKey === 'pressure',
+        })
       }
       await refetchSubs()
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       toast(currently ? `${paramKey} alerts disabled` : `${paramKey} alerts enabled`)
     } catch {
       toast('Failed to update subscription', 'error')
