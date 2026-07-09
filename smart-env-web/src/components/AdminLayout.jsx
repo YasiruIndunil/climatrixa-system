@@ -14,10 +14,10 @@ import api from '../utils/api'
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Overview', end: true },
   { to: '/admin/sensors', icon: Radio, label: 'Sensors' },
+  { to: '/admin/map', icon: Map, label: 'Sensor Map' },
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/alerts', icon: Bell, label: 'Alerts' },
   { to: '/admin/export', icon: Download, label: 'Export' },
-  { to: '/admin/map', icon: Map, label: 'Sensor Map' },
 ]
 
 
@@ -26,13 +26,15 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) { clearInterval(timer); onDismiss(); return 0 }
-        return c - 1
-      })
+      setCountdown(c => c <= 1 ? 0 : c - 1)
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Trigger dismiss in a separate effect when countdown hits 0
+  useEffect(() => {
+    if (countdown === 0) onDismiss()
+  }, [countdown])
 
   const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
   const borderColor = isHigh ? 'border-red-400' : 'border-orange-400'
@@ -121,7 +123,12 @@ export default function AdminLayout() {
   }
 
   const [emergencyEvent, setEmergencyEvent] = useState(null)
-  const [seenEventIds, setSeenEventIds] = useState(new Set())
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('dismissedAlerts')
+      return stored ? JSON.parse(stored) : {}
+    } catch { return {} }
+  })
 
   const { data: events } = useQuery({
     queryKey: ['alert-events'],
@@ -137,14 +144,27 @@ export default function AdminLayout() {
     } catch {}
   }
 
-  useEffect(() => {
+  const checkAlerts = () => {
     if (!events) return
-    const newUnread = events.find(e => !e.acknowledged && !seenEventIds.has(e.id))
+    const REMIND_MS = 60 * 1000
+    const now = Date.now()
+    const newUnread = events.find(e => {
+      if (e.acknowledged) return false
+      const dismissedAt = dismissedAlerts[e.id]
+      return !dismissedAt || (now - dismissedAt) >= REMIND_MS
+    })
     if (newUnread && !emergencyEvent) {
       setEmergencyEvent(newUnread)
-      setSeenEventIds(prev => new Set([...prev, newUnread.id]))
     }
-  }, [events])
+  }
+
+  useEffect(() => { checkAlerts() }, [events, dismissedAlerts])
+
+  // Re-check every minute so expired dismissals trigger the popup again
+  useEffect(() => {
+    const interval = setInterval(checkAlerts, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [events, dismissedAlerts, emergencyEvent])
 
   return (
     <div className={`flex h-screen ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
@@ -267,7 +287,12 @@ export default function AdminLayout() {
       {emergencyEvent && (
         <GlobalAlertPopup
           event={emergencyEvent}
-          onDismiss={() => setEmergencyEvent(null)}
+          onDismiss={() => {
+            const updated = { ...dismissedAlerts, [emergencyEvent.id]: Date.now() }
+            setDismissedAlerts(updated)
+            try { sessionStorage.setItem('dismissedAlerts', JSON.stringify(updated)) } catch {}
+            setEmergencyEvent(null)
+          }}
           onAcknowledge={acknowledgeGlobal}
         />
       )}
