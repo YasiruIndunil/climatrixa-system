@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit2, ToggleLeft, ToggleRight, MapPin, Radio, Search, X } from 'lucide-react'
+import { Plus, Edit2, ToggleLeft, ToggleRight, MapPin, Radio, Search, X, BrainCircuit, CheckCircle } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -165,6 +165,34 @@ export default function Sensors() {
   const [editing, setEditing] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [trainingIds, setTrainingIds] = useState(new Set())
+  const [trainedIds, setTrainedIds] = useState(new Set())
+
+  const trainModel = async (sensor) => {
+    setTrainingIds(prev => new Set([...prev, sensor.id]))
+    try {
+      await api.post(`/ai/train/${sensor.id}`)
+      toast(`Training started for ${sensor.name} — takes ~60 seconds`)
+      // Poll status every 10 seconds for up to 2 minutes
+      let attempts = 0
+      const poll = setInterval(async () => {
+        attempts++
+        try {
+          const res = await api.get(`/ai/train/status/${sensor.id}`)
+          if (res.data.is_trained) {
+            clearInterval(poll)
+            setTrainingIds(prev => { const n = new Set(prev); n.delete(sensor.id); return n })
+            setTrainedIds(prev => new Set([...prev, sensor.id]))
+            toast(`AI model trained for ${sensor.name}`)
+          }
+        } catch {}
+        if (attempts >= 12) clearInterval(poll)
+      }, 10000)
+    } catch {
+      toast('Failed to start training', 'error')
+      setTrainingIds(prev => { const n = new Set(prev); n.delete(sensor.id); return n })
+    }
+  }
 
   const { data: sensors, isLoading } = useQuery({
     queryKey: ['sensors'],
@@ -300,6 +328,20 @@ export default function Sensors() {
                 }`}>
                   {sensor.is_active ? '● Active' : '○ Inactive'}
                 </span>
+                <Tooltip text={trainedIds.has(sensor.id) ? 'AI model trained ✓' : trainingIds.has(sensor.id) ? 'Training...' : 'Train AI model'}>
+                  <button
+                    onClick={() => trainModel(sensor)}
+                    disabled={trainingIds.has(sensor.id)}
+                    className={`p-2 rounded-xl transition-colors ${
+                      trainedIds.has(sensor.id)
+                        ? 'text-teal-500'
+                        : trainingIds.has(sensor.id)
+                          ? dark ? 'text-gray-600 animate-pulse' : 'text-gray-300 animate-pulse'
+                          : dark ? 'hover:bg-gray-800 text-gray-500 hover:text-purple-400' : 'hover:bg-purple-50 text-gray-400 hover:text-purple-600'
+                    }`}>
+                    {trainedIds.has(sensor.id) ? <CheckCircle size={16}/> : <BrainCircuit size={16}/>}
+                  </button>
+                </Tooltip>
                 <Tooltip text="Edit sensor">
                   <button onClick={() => { setEditing(sensor); setModalOpen(true) }}
                     className={`p-2 rounded-xl transition-colors ${dark ? 'hover:bg-gray-800 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}>
