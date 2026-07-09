@@ -184,10 +184,25 @@ function RuleModal({ onClose }) {
     queryKey: ['sensors'],
     queryFn: () => api.get('/sensors/').then(r => r.data)
   })
+  const { data: existingRules } = useQuery({
+    queryKey: ['alert-rules'],
+    queryFn: () => api.get('/alerts/rules/').then(r => r.data)
+  })
 
   const handleSubmit = async e => {
     e.preventDefault()
     setSaving(true)
+
+    // Check for duplicate sensor + alert_type combination
+    const duplicate = existingRules?.find(r =>
+      r.sensor_id === form.sensor_id && r.alert_type === form.alert_type
+    )
+    if (duplicate) {
+      toast(`A ${form.alert_type.replace(/_/g, ' ')} rule already exists for this sensor (threshold: ${duplicate.threshold_value}). Edit or delete the existing rule instead.`, 'error')
+      setSaving(false)
+      return
+    }
+
     try {
       const payload = {
         sensor_id: form.sensor_id,
