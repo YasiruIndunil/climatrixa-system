@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../context/useAuth'
 import { useTheme } from '../../context/ThemeContext'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../../utils/api'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -55,6 +55,7 @@ function AQIBadge({ status }) {
 export default function SensorMap() {
   const { user } = useAuth()
   const { dark } = useTheme()
+  const [showOnlyMine, setShowOnlyMine] = useState(false)
 
   const { data: mySensors } = useQuery({
     queryKey: ['my-sensors', user?.id],
@@ -74,8 +75,8 @@ export default function SensorMap() {
   })
 
   const assignedIds = new Set(mySensors?.map(row => row.sensors?.id).filter(Boolean) || [])
-  // ALL sensors with GPS — shown to everyone
-  const sensors = (allSensors || []).filter(s => s.latitude && s.longitude)
+  const allWithGPS = (allSensors || []).filter(s => s.latitude && s.longitude)
+  const sensors = showOnlyMine ? allWithGPS.filter(s => assignedIds.has(s.id)) : allWithGPS
   const readingMap = Object.fromEntries((readings || []).map(r => [r.sensor_id, r]))
 
   const sub  = dark ? 'text-gray-500' : 'text-gray-400'
@@ -84,12 +85,29 @@ export default function SensorMap() {
 
   return (
     <div className={`p-6 ${dark ? 'text-white' : 'text-gray-900'}`}>
-      <div className="mb-4">
-        <h1 className={`text-xl font-bold ${head}`}>Sensor Map</h1>
-        <p className={`text-sm mt-0.5 ${sub}`}>
-          {sensors.length} sensor{sensors.length !== 1 ? 's' : ''} on map ·{' '}
-          <span className="text-blue-500 font-medium">{assignedIds.size} assigned to me</span>
-        </p>
+      <div className="mb-4 flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className={`text-xl font-bold ${head}`}>Sensor Map</h1>
+          <p className={`text-sm mt-0.5 ${sub}`}>
+            {sensors.length} sensor{sensors.length !== 1 ? 's' : ''} on map ·{' '}
+            <span className="text-blue-500 font-medium">{assignedIds.size} assigned to me</span>
+          </p>
+        </div>
+        {/* Filter toggle */}
+        <div className={`flex rounded-xl overflow-hidden border text-xs font-medium ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <button
+            onClick={() => setShowOnlyMine(false)}
+            className={`px-3 py-1.5 transition-colors ${!showOnlyMine
+              ? 'bg-blue-600 text-white'
+              : dark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}
+          >All Sensors</button>
+          <button
+            onClick={() => setShowOnlyMine(true)}
+            className={`px-3 py-1.5 transition-colors ${showOnlyMine
+              ? 'bg-blue-600 text-white'
+              : dark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}
+          >My Sensors</button>
+        </div>
       </div>
 
       {/* Legend */}
