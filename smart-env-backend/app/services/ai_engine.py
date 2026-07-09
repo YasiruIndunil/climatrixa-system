@@ -166,7 +166,7 @@ def train_models(sensor_id: str) -> dict:
 # ── Forecasting ───────────────────────────────────────────────────────────────
 
 def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
-    forecast_rows = {h: {"hours_ahead": h} for h in range(1, hours_ahead + 1)}
+    forecast_rows = {h: {"hours_ahead": h, "temperature": None, "humidity": None, "aqi": None, "pressure": None} for h in range(1, hours_ahead + 1)}
 
     for param in ["temperature", "humidity", "aqi", "pressure"]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
@@ -183,10 +183,11 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
 
             steps = hours_ahead * 6
             pred = model.forecast(steps)
+            pred_values = pred.values  # Use numpy array to avoid iloc index issues
 
             for h in range(1, hours_ahead + 1):
-                hour_preds = pred.iloc[(h - 1) * 6: h * 6]
-                mean_val = float(hour_preds.mean())
+                hour_preds = pred_values[(h - 1) * 6: h * 6]
+                mean_val = float(np.mean(hour_preds))
                 if np.isnan(mean_val):
                     raise ValueError(f"NaN in forecast for {param}")
                 val = round(mean_val, 1)
