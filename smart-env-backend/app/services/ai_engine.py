@@ -186,10 +186,8 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
             model = _download_model(filename)
-            # Forecast steps = hours_ahead * 6 (10-min intervals per hour)
             steps = hours_ahead * 6
             pred = model.forecast(steps)
-            # Average each hour's 6 predictions
             for h in range(1, hours_ahead + 1):
                 hour_preds = pred.iloc[(h - 1) * 6: h * 6]
                 val = round(float(hour_preds.mean()), 1)
@@ -198,20 +196,26 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                 elif param == "aqi":         val = max(0, min(500, val))
                 elif param == "pressure":    val = max(900, min(1100, val))
                 forecast_rows[h][param] = val
-        except Exception:
+        except Exception as e:
+            print(f"[AI] Forecast fallback for {param}: {e}")
             # Fallback to linear trend
             df = _get_recent_readings(sensor_id, n=72)
-            if not df.empty and param in df.columns:
+            if not df.empty and param in df.columns and df[param].notna().sum() > 5:
                 x = np.arange(len(df))
-                y = df[param].values
+                y = df[param].fillna(method='ffill').values
                 coeffs = np.polyfit(x, y, deg=1)
                 future_x = np.arange(len(df), len(df) + hours_ahead)
                 predicted = np.polyval(coeffs, future_x)
                 for h, val in enumerate(predicted, 1):
-                    forecast_rows[h][param] = round(float(val), 1)
+                    val = round(float(val), 1)
+                    if param == "pressure": val = max(900, min(1100, val))
+                    forecast_rows[h][param] = val
             else:
+                # Last resort — use mean of recent readings
+                df2 = _get_recent_readings(sensor_id, n=20)
+                default = round(float(df2[param].mean()), 1) if not df2.empty and param in df2.columns else 0.0
                 for h in range(1, hours_ahead + 1):
-                    forecast_rows[h][param] = 0.0
+                    forecast_rows[h][param] = default
 
     return [forecast_rows[h] for h in sorted(forecast_rows.keys())]
 
