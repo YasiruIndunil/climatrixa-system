@@ -89,7 +89,7 @@ def _get_all_readings(sensor_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.DataFrame(all_rows)
-    df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True)
+    df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True, format="ISO8601")
     df = df.sort_values("recorded_at").reset_index(drop=True)
     return df
 
@@ -107,7 +107,7 @@ def _get_recent_readings(sensor_id: str, n: int = 100) -> pd.DataFrame:
     if not result.data:
         return pd.DataFrame()
     df = pd.DataFrame(result.data)
-    df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True)
+    df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True, format="ISO8601")
     df = df.sort_values("recorded_at").reset_index(drop=True)
     return df
 
