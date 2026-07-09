@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { X, CheckCheck, AlertTriangle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import {
-  LayoutDashboard, Radio, Users, Bell, Download,
+  LayoutDashboard, Radio, Users, Bell, Download, Map,
   LogOut, Leaf, WifiOff, Sun, Moon
 } from 'lucide-react'
 import api from '../utils/api'
@@ -17,6 +17,7 @@ const navItems = [
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/alerts', icon: Bell, label: 'Alerts' },
   { to: '/admin/export', icon: Download, label: 'Export' },
+  { to: '/admin/map', icon: Map, label: 'Sensor Map' },
 ]
 
 
