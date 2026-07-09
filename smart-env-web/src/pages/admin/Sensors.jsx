@@ -228,17 +228,32 @@ export default function Sensors() {
         <div className="relative flex-1">
           <Search size={14} className={`absolute left-3 top-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
           <ThemedInput
-            className="pl-9"
-            placeholder="Search by name, location or MAC address..."
+            className="pl-9 pr-8 w-full"
+            placeholder="Search by name, location or MAC..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-3">
+              <X size={14} className={dark ? 'text-gray-500' : 'text-gray-400'} />
+            </button>
+          )}
         </div>
-        <ThemedSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-36">
+        <ThemedSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="flex-1">
           <option value="all">All status</option>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
         </ThemedSelect>
+        {(search || statusFilter !== 'all') && (
+          <button
+            onClick={() => { setSearch(''); setStatusFilter('all') }}
+            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors whitespace-nowrap ${
+              dark ? 'border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+            }`}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Sensor cards */}

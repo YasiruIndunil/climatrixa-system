@@ -137,8 +137,20 @@ async def export_readings(
         query = query.gte("recorded_at", _slst_to_utc(from_, end_of_day=False))
     if to:
         query = query.lte("recorded_at", _slst_to_utc(to, end_of_day=True))
-    result = query.order("recorded_at", desc=True).execute()
-    rows = result.data or []
+
+    # Paginate to fetch all records beyond Supabase's 1000 default limit
+    all_rows = []
+    page = 0
+    page_size = 1000
+    while True:
+        result = query.order("recorded_at", desc=True).range(page * page_size, (page + 1) * page_size - 1).execute()
+        if not result.data:
+            break
+        all_rows.extend(result.data)
+        if len(result.data) < page_size:
+            break
+        page += 1
+    rows = all_rows
 
     # Fetch sensor info map
     sensors_result = db.table("sensors").select("id, name, location, latitude, longitude, industry_profile").execute()

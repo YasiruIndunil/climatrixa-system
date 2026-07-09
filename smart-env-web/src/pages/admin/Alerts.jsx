@@ -395,6 +395,8 @@ export default function Alerts() {
   const toast = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [ruleSearch, setRuleSearch] = useState('')
+  const [ruleSensorFilter, setRuleSensorFilter] = useState('all')
+  const [ruleTypeFilter, setRuleTypeFilter] = useState('all')
   const [eventSearch, setEventSearch] = useState('')
   const [showAcknowledged, setShowAcknowledged] = useState(false)
   const [emergencyEvent, setEmergencyEvent] = useState(null)
@@ -453,11 +455,16 @@ export default function Alerts() {
 
   const unreadCount = events?.filter(e => !e.acknowledged).length ?? 0
 
-  const filteredRules = rules?.filter(r =>
-    !ruleSearch ||
-    r.alert_type?.includes(ruleSearch.toLowerCase()) ||
-    r.notify_email?.toLowerCase().includes(ruleSearch.toLowerCase())
-  )
+  const filteredRules = rules?.filter(r => {
+    const sensorName = sensors?.find(s => s.id === r.sensor_id)?.name?.toLowerCase() || ''
+    const matchSearch = !ruleSearch ||
+      r.alert_type?.toLowerCase().includes(ruleSearch.toLowerCase()) ||
+      r.notify_email?.toLowerCase().includes(ruleSearch.toLowerCase()) ||
+      sensorName.includes(ruleSearch.toLowerCase())
+    const matchSensor = ruleSensorFilter === 'all' || r.sensor_id === ruleSensorFilter
+    const matchType = ruleTypeFilter === 'all' || r.alert_type === ruleTypeFilter
+    return matchSearch && matchSensor && matchType
+  })
 
   const filteredEvents = events
     ?.filter(e => showAcknowledged ? true : !e.acknowledged)
@@ -509,14 +516,48 @@ export default function Alerts() {
 
       {/* Rules */}
       <div className={`rounded-2xl border shadow-sm mb-6 overflow-hidden ${cardBg}`}>
-        <div className={`px-5 py-4 border-b flex items-center gap-3 ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
-          <Bell size={16} className="text-teal-500" />
-          <h2 className={`font-semibold text-sm ${headText}`}>
-            Rules <span className={`font-normal ${subText}`}>({filteredRules?.length ?? 0})</span>
-          </h2>
-          <div className="ml-auto">
-            <input className={inputClass + ' w-48'} placeholder="Search rules..."
-              value={ruleSearch} onChange={e => setRuleSearch(e.target.value)} />
+        <div className={`px-5 py-4 border-b ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+          <div className="flex items-center gap-3 mb-3">
+            <Bell size={16} className="text-teal-500" />
+            <h2 className={`font-semibold text-sm ${headText}`}>
+              Rules <span className={`font-normal ${subText}`}>({filteredRules?.length ?? 0})</span>
+            </h2>
+          </div>
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search size={13} className={`absolute left-3 top-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`}/>
+              <input className={inputClass + ' pl-8 pr-8 w-full'} placeholder="Search by sensor, type or email..."
+                value={ruleSearch} onChange={e => setRuleSearch(e.target.value)} />
+              {ruleSearch && (
+                <button onClick={() => setRuleSearch('')} className="absolute right-3 top-3">
+                  <X size={13} className={dark ? 'text-gray-500' : 'text-gray-400'}/>
+                </button>
+              )}
+            </div>
+            <select className={inputClass + ' flex-1'} value={ruleSensorFilter} onChange={e => setRuleSensorFilter(e.target.value)}>
+              <option value="all">All sensors</option>
+              {sensors?.filter(s => s.is_active).map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <select className={inputClass + ' flex-1'} value={ruleTypeFilter} onChange={e => setRuleTypeFilter(e.target.value)}>
+              <option value="all">All types</option>
+              <option value="temperature_high">Temp High</option>
+              <option value="temperature_low">Temp Low</option>
+              <option value="humidity_high">Humidity High</option>
+              <option value="humidity_low">Humidity Low</option>
+              <option value="aqi_high">AQI High</option>
+              <option value="pressure_high">Pressure High</option>
+              <option value="pressure_low">Pressure Low</option>
+            </select>
+            {(ruleSearch || ruleSensorFilter !== 'all' || ruleTypeFilter !== 'all') && (
+              <button
+                onClick={() => { setRuleSearch(''); setRuleSensorFilter('all'); setRuleTypeFilter('all') }}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors whitespace-nowrap ${
+                  dark ? 'border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                }`}
+              >Clear</button>
+            )}
           </div>
         </div>
 
