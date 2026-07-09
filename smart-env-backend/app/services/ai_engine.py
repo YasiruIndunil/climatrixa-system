@@ -150,8 +150,6 @@ def train_models(sensor_id: str) -> dict:
             continue
         series = df[param].dropna()
         try:
-            # Save the training series — refit on each forecast request
-            # This avoids statsmodels pickle/unpickle compatibility issues
             _upload_series(series, f"forecast_{sensor_id}_{param}.pkl")
             trained.append(f"forecast_{param}")
             print(f"[AI] Saved training data for {param} ({len(series)} points)")
@@ -192,15 +190,26 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
             series = _download_model(filename)
-            # Refit ExponentialSmoothing on loaded series
             seasonal_periods = min(144, len(series) // 2)
-            model = ExponentialSmoothing(
-                series,
-                trend="add",
-                seasonal="add" if len(series) >= seasonal_periods * 2 else None,
-                seasonal_periods=seasonal_periods if len(series) >= seasonal_periods * 2 else None,
-                initialization_method="estimated",
-            ).fit(optimized=True)
+            has_season = len(series) >= seasonal_periods * 2
+
+            # Pressure has weak seasonality — use simpler trend-only model
+            if param == "pressure":
+                model = ExponentialSmoothing(
+                    series,
+                    trend="add",
+                    seasonal=None,
+                    initialization_method="estimated",
+                ).fit(optimized=True, disp=False)
+            else:
+                model = ExponentialSmoothing(
+                    series,
+                    trend="add",
+                    seasonal="add" if has_season else None,
+                    seasonal_periods=seasonal_periods if has_season else None,
+                    initialization_method="estimated",
+                ).fit(optimized=True, disp=False)
+
             steps = hours_ahead * 6
             pred = model.forecast(steps)
             for h in range(1, hours_ahead + 1):
@@ -210,7 +219,8 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                 elif param == "humidity":    val = max(0, min(100, val))
                 elif param == "aqi":         val = max(0, min(500, val))
                 elif param == "pressure":    val = max(900, min(1100, val))
-                forecast_rows[h][param] = val
+                if not np.isnan(val):
+                    forecast_rows[h][param] = val
         except Exception as e:
             print(f"[AI] Forecast fallback for {param}: {e}")
             df = _get_recent_readings(sensor_id, n=72)
