@@ -6,8 +6,8 @@ Models:
   2. IsolationForest — anomaly detection on recent readings
 
 Model persistence:
-  - Trained models saved to Supabase Storage bucket "ai-models"
-  - Downloaded and cached in memory on first prediction request
+  - Training series saved to Supabase Storage bucket "ai-models"
+  - Refitted on each forecast request (avoids pickle compatibility issues)
   - Retrain via POST /ai/train/{sensor_id}
 """
 import io
@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from app.core.database import db
 
-# In-memory model cache
+# In-memory model cache — cleared before each forecast to avoid stale data
 _model_cache: dict = {}
 
 BUCKET = "ai-models"
@@ -44,7 +44,6 @@ def _upload_model(model, filename: str):
 
 
 def _upload_series(series: pd.Series, filename: str):
-    """Save a pandas Series (training data) to Supabase Storage."""
     buf = io.BytesIO()
     joblib.dump(series, buf)
     buf.seek(0)
@@ -59,13 +58,10 @@ def _upload_series(series: pd.Series, filename: str):
     )
 
 
-def _download_model(filename: str):
-    if filename in _model_cache:
-        return _model_cache[filename]
+def _download_fresh(filename: str):
+    """Always download fresh from storage — never use cache."""
     data = db.storage.from_(BUCKET).download(filename)
-    model = joblib.load(io.BytesIO(data))
-    _model_cache[filename] = model
-    return model
+    return joblib.load(io.BytesIO(data))
 
 
 def _clear_cache(sensor_id: str):
@@ -125,11 +121,6 @@ def _get_recent_readings(sensor_id: str, n: int = 200) -> pd.DataFrame:
 # ── Training ──────────────────────────────────────────────────────────────────
 
 def train_models(sensor_id: str) -> dict:
-    """
-    Train Holt-Winters ExponentialSmoothing forecast models
-    and Isolation Forest anomaly detector.
-    Saves all models to Supabase Storage.
-    """
     print(f"[AI] Fetching readings for {sensor_id}...")
     df = _get_all_readings(sensor_id)
 
@@ -156,14 +147,9 @@ def train_models(sensor_id: str) -> dict:
         except Exception as e:
             print(f"[AI] Error saving {param}: {e}")
 
-    # Train Isolation Forest
+    # Train Isolation Forest anomaly detector
     features = df[["temperature", "humidity", "aqi", "pressure"]].dropna().values
-    iso = IsolationForest(
-        n_estimators=200,
-        contamination=0.03,
-        random_state=42,
-        n_jobs=-1,
-    )
+    iso = IsolationForest(n_estimators=200, contamination=0.03, random_state=42, n_jobs=-1)
     iso.fit(features)
     _upload_model(iso, f"anomaly_{sensor_id}.pkl")
     trained.append("anomaly_detector")
@@ -180,28 +166,24 @@ def train_models(sensor_id: str) -> dict:
 # ── Forecasting ───────────────────────────────────────────────────────────────
 
 def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
-    """
-    Load trained ExponentialSmoothing models and generate hourly forecast.
-    Falls back to linear trend if models not trained yet.
-    """
     forecast_rows = {h: {"hours_ahead": h} for h in range(1, hours_ahead + 1)}
 
     for param in ["temperature", "humidity", "aqi", "pressure"]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
-            # Always fetch fresh from storage — never use stale cache for forecast
-            if filename in _model_cache:
-                del _model_cache[filename]
-            series = _download_model(filename)
-            # Simple trend-only model — avoids convergence issues with seasonal components
+            # Always download fresh — never use stale in-memory cache
+            series = _download_fresh(filename)
+
             model = ExponentialSmoothing(
                 series,
                 trend="add",
                 seasonal=None,
                 initialization_method="estimated",
             ).fit(optimized=True)
+
             steps = hours_ahead * 6
             pred = model.forecast(steps)
+
             for h in range(1, hours_ahead + 1):
                 hour_preds = pred.iloc[(h - 1) * 6: h * 6]
                 mean_val = float(hour_preds.mean())
@@ -213,8 +195,10 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                 elif param == "aqi":         val = max(0, min(1500, val))
                 elif param == "pressure":    val = max(900, min(1100, val))
                 forecast_rows[h][param] = val
+
         except Exception as e:
             print(f"[AI] Forecast fallback for {param}: {e}")
+            # Linear trend fallback
             df = _get_recent_readings(sensor_id, n=72)
             if not df.empty and param in df.columns and df[param].notna().sum() > 5:
                 x = np.arange(len(df))
@@ -238,16 +222,13 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
 # ── Anomaly detection ─────────────────────────────────────────────────────────
 
 def detect_anomaly(sensor_id: str) -> tuple[bool, Optional[str]]:
-    """
-    Load trained Isolation Forest and check if latest reading is anomalous.
-    """
     df = _get_recent_readings(sensor_id, n=100)
 
     if len(df) < 5:
         return False, None
 
     try:
-        model = _download_model(f"anomaly_{sensor_id}.pkl")
+        model = _download_fresh(f"anomaly_{sensor_id}.pkl")
         latest = df[["temperature", "humidity", "aqi", "pressure"]].iloc[-1].values.reshape(1, -1)
         prediction = model.predict(latest)
         is_anomaly = prediction[0] == -1
