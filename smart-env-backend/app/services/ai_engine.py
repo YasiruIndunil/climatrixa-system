@@ -190,37 +190,26 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
             series = _download_model(filename)
-            seasonal_periods = min(144, len(series) // 2)
-            has_season = len(series) >= seasonal_periods * 2
-
-            # Pressure has weak seasonality — use simpler trend-only model
-            if param == "pressure":
-                model = ExponentialSmoothing(
-                    series,
-                    trend="add",
-                    seasonal=None,
-                    initialization_method="estimated",
-                ).fit(optimized=True)
-            else:
-                model = ExponentialSmoothing(
-                    series,
-                    trend="add",
-                    seasonal="add" if has_season else None,
-                    seasonal_periods=seasonal_periods if has_season else None,
-                    initialization_method="estimated",
-                ).fit(optimized=True)
-
+            # Simple trend-only model — avoids convergence issues with seasonal components
+            model = ExponentialSmoothing(
+                series,
+                trend="add",
+                seasonal=None,
+                initialization_method="estimated",
+            ).fit(optimized=True)
             steps = hours_ahead * 6
             pred = model.forecast(steps)
             for h in range(1, hours_ahead + 1):
                 hour_preds = pred.iloc[(h - 1) * 6: h * 6]
-                val = round(float(hour_preds.mean()), 1)
+                mean_val = float(hour_preds.mean())
+                if np.isnan(mean_val):
+                    raise ValueError(f"NaN in forecast for {param}")
+                val = round(mean_val, 1)
                 if param == "temperature":   val = max(0, min(60, val))
                 elif param == "humidity":    val = max(0, min(100, val))
-                elif param == "aqi":         val = max(0, min(500, val))
+                elif param == "aqi":         val = max(0, min(1500, val))
                 elif param == "pressure":    val = max(900, min(1100, val))
-                if not np.isnan(val):
-                    forecast_rows[h][param] = val
+                forecast_rows[h][param] = val
         except Exception as e:
             print(f"[AI] Forecast fallback for {param}: {e}")
             df = _get_recent_readings(sensor_id, n=72)
