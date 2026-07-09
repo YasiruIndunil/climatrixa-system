@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     debug: bool = True
     allowed_origins: str = "http://localhost:3000,http://localhost:5173,https://climatrixa-system.vercel.app"
 
+
     # Supabase
     supabase_url: str
     supabase_anon_key: str
@@ -25,7 +26,8 @@ class Settings(BaseSettings):
     mqtt_username: str
     mqtt_password: str
     mqtt_topic_prefix: str = "smartenv"
-
+    brand_api_key: str = ""
+    
     @property
     def origins_list(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",")]

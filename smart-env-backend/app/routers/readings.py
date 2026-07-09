@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from typing import List, Optional
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from app.models.schemas import ReadingCreate, ReadingResponse, LatestReadingsResponse
 from app.core.database import db
 from app.core.security import require_admin
@@ -13,11 +13,30 @@ import csv
 
 router = APIRouter(prefix="/readings", tags=["Readings"])
 
-# ── WebSocket connection manager ──────────────────────────────────────────────
 from app.core.ws_manager import manager
 
+SLST_OFFSET = timedelta(hours=5, minutes=30)
 
-# ── HTTP endpoints ────────────────────────────────────────────────────────────
+
+def _to_slst(dt_raw) -> str:
+    if not dt_raw:
+        return ""
+    try:
+        dt_str = str(dt_raw).replace(" ", "T").replace("+00", "+00:00").replace("+00:00:00", "+00:00")
+        dt = datetime.fromisoformat(dt_str)
+        return format_slst(dt)
+    except Exception:
+        return str(dt_raw)
+
+
+def _slst_to_utc(date_str: str, end_of_day: bool = False) -> str:
+    """Convert a SLST date string (YYYY-MM-DD) to UTC datetime string for DB filtering."""
+    time_part = "23:59:59" if end_of_day else "00:00:00"
+    slst_dt = datetime.strptime(f"{date_str} {time_part}", "%Y-%m-%d %H:%M:%S")
+    slst_dt = slst_dt.replace(tzinfo=timezone(SLST_OFFSET))
+    utc_dt = slst_dt.astimezone(timezone.utc)
+    return utc_dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
 
 @router.post("/", response_model=ReadingResponse, status_code=201)
 async def store_reading(body: ReadingCreate):
@@ -93,8 +112,6 @@ def _aqi_label(aqi: float) -> str:
     return "Hazardous"
 
 
-# ── WebSocket endpoint ────────────────────────────────────────────────────────
-
 @router.websocket("/ws/live")
 async def live_readings_ws(websocket: WebSocket):
     await manager.connect(websocket)
@@ -104,8 +121,6 @@ async def live_readings_ws(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-
-# ── Export endpoint ───────────────────────────────────────────────────────────
 
 @router.get("/export")
 async def export_readings(
@@ -119,38 +134,55 @@ async def export_readings(
     if sensor_id:
         query = query.eq("sensor_id", sensor_id)
     if from_:
-        query = query.gte("recorded_at", from_)
+        query = query.gte("recorded_at", _slst_to_utc(from_, end_of_day=False))
     if to:
-        query = query.lte("recorded_at", to)
+        query = query.lte("recorded_at", _slst_to_utc(to, end_of_day=True))
     result = query.order("recorded_at", desc=True).execute()
     rows = result.data or []
 
-    def to_slst(dt_raw):
-        try:
-            dt = datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
-            return format_slst(dt)
-        except:
-            return dt_raw
+    # Fetch sensor info map
+    sensors_result = db.table("sensors").select("id, name, location, latitude, longitude, industry_profile").execute()
+    sensor_map = {s["id"]: s for s in (sensors_result.data or [])}
+
+    headers = ["sensor_name", "location", "latitude", "longitude", "industry_profile",
+               "temperature", "humidity", "aqi", "pressure", "recorded_at (SLST)"]
+
+    def row_data(r):
+        s = sensor_map.get(r.get("sensor_id"), {})
+        return [
+            s.get("name", ""),
+            s.get("location", ""),
+            s.get("latitude", ""),
+            s.get("longitude", ""),
+            s.get("industry_profile", ""),
+            r.get("temperature", ""),
+            r.get("humidity", ""),
+            r.get("aqi", ""),
+            r.get("pressure", ""),
+            _to_slst(r.get("recorded_at", "")),
+        ]
 
     if format == "pdf":
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
         buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4)
-        data = [["Sensor ID", "Temperature", "Humidity", "AQI", "Pressure", "Recorded At (SLST)"]]
-        for r in rows:
-            data.append([
-                r.get("sensor_id", ""), r.get("temperature", ""), r.get("humidity", ""),
-                r.get("aqi", ""), r.get("pressure", ""), to_slst(r.get("recorded_at", ""))
-            ])
-        table = Table(data)
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("Climatrixa — Sensor Readings Report", styles["Title"]), Spacer(1, 12)]
+        data = [headers] + [row_data(r) for r in rows]
+        table = Table(data, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.teal),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
         ]))
-        doc.build([table])
+        elements.append(table)
+        doc.build(elements)
         buf.seek(0)
         return Response(content=buf.read(), media_type="application/pdf",
                         headers={"Content-Disposition": "attachment; filename=readings.pdf"})
@@ -158,12 +190,9 @@ async def export_readings(
     # CSV
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["sensor_id", "temperature", "humidity", "aqi", "pressure", "recorded_at"])
+    writer.writerow(headers)
     for r in rows:
-        writer.writerow([
-            r.get("sensor_id"), r.get("temperature"), r.get("humidity"),
-            r.get("aqi"), r.get("pressure"), to_slst(r.get("recorded_at", ""))
-        ])
+        writer.writerow(row_data(r))
     output.seek(0)
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
                              headers={"Content-Disposition": "attachment; filename=readings.csv"})
