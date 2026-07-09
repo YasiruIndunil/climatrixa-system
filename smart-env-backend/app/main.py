@@ -12,30 +12,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.routers import auth, sensors, readings, predictions, alerts, access, subscriptions
 from app.services.mqtt_client import start_mqtt_listener, stop_mqtt_listener
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
-
 # ── Lifespan: startup and shutdown events ─────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Code before 'yield' runs at startup.
-    Code after 'yield' runs at shutdown.
-    """
     print(f"Starting {settings.app_name} v{settings.app_version}")
-
     # Start MQTT subscriber in background thread
     # This listens for ESP32 data published to HiveMQ
     start_mqtt_listener()
+    start_scheduler()
 
-    yield  # App is running
-
+    yield # App is running
     # Cleanup on shutdown
     stop_mqtt_listener()
+    stop_scheduler()
     print("Server shutting down.")
-
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 
@@ -63,8 +57,6 @@ app = FastAPI(
     """,
     lifespan=lifespan,
 )
-
-
 # ── CORS (Cross-Origin Resource Sharing) ──────────────────────────────────────
 # Allows Flutter web, React, and local dev to call the API
 
@@ -76,9 +68,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ── Register routers ──────────────────────────────────────────────────────────
-
 app.include_router(auth.router)
 app.include_router(sensors.router)
 app.include_router(readings.router)
@@ -87,9 +77,7 @@ app.include_router(alerts.router)
 app.include_router(access.router)
 app.include_router(subscriptions.router)
 
-
 # ── Health check endpoint ──────────────────────────────────────────────────────
-
 @app.get("/", tags=["Health"])
 async def root():
     return {
@@ -100,7 +88,7 @@ async def root():
     }
 
 
-@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"], 
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"],
                operation_id="health_check")
 async def health():
     """Used by Render and uptime monitors to check if the service is alive."""
