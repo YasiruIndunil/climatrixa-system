@@ -43,8 +43,8 @@ async def get_train_status(
     """Check if models are trained for a sensor by checking Supabase Storage."""
     try:
         files = db.storage.from_("ai-models").list()
-        trained_files = [f["name"] for f in files if sensor_id in f["name"]]
-        is_trained = any(f"forecast_{sensor_id}_temperature.pkl" in f for f in trained_files)
+        trained_files = [f["name"] for f in files if sensor_id in f.get("name", "")]
+        is_trained = f"forecast_{sensor_id}_temperature.pkl" in trained_files
         return {
             "sensor_id": sensor_id,
             "is_trained": is_trained,
@@ -54,7 +54,14 @@ async def get_train_status(
         return {"sensor_id": sensor_id, "is_trained": False, "error": str(e)}
 
 
-@router.get("/forecast/{sensor_id}", response_model=PredictionResponse)
+@router.get("/schedule/logs")
+async def get_schedule_logs(
+    limit: int = 20,
+    admin: dict = Depends(require_admin)
+):
+    """Get recent AI retraining schedule logs. Admin only."""
+    result = db.table("schedule_logs").select("*").order("created_at", desc=True).limit(limit).execute()
+    return result.data or []
 async def get_prediction(sensor_id: str, hours: int = 24):
     """
     Get AI forecast for the next N hours and anomaly detection result.
