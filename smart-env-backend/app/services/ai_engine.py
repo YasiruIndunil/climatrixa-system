@@ -189,6 +189,9 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
     for param in ["temperature", "humidity", "aqi", "pressure"]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
+            # Always fetch fresh from storage — never use stale cache for forecast
+            if filename in _model_cache:
+                del _model_cache[filename]
             series = _download_model(filename)
             # Simple trend-only model — avoids convergence issues with seasonal components
             model = ExponentialSmoothing(
