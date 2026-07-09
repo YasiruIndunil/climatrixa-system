@@ -36,12 +36,13 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
     : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'
 
   useEffect(() => {
-    const t = setInterval(() => setCountdown(c => {
-      if (c <= 1) { clearInterval(t); onDismiss(); return 0 }
-      return c - 1
-    }), 1000)
+    const t = setInterval(() => setCountdown(c => c <= 1 ? 0 : c - 1), 1000)
     return () => clearInterval(t)
   }, [])
+
+  useEffect(() => {
+    if (countdown === 0) onDismiss()
+  }, [countdown])
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
@@ -100,7 +101,13 @@ export default function PublicLayout() {
   const queryClient = useQueryClient()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [emergencyEvent, setEmergencyEvent] = useState(null)
-  const [seenEventIds, setSeenEventIds] = useState(new Set())
+  // Store { id: dismissedAt } — expire after 1 minute so unacknowledged alerts reappear
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('dismissedAlerts')
+      return stored ? JSON.parse(stored) : {}
+    } catch { return {} }
+  })
 
   const { data: events } = useQuery({
     queryKey: ['public-alert-events'],
@@ -110,14 +117,26 @@ export default function PublicLayout() {
 
   const unreadCount = events?.filter(e => !e.acknowledged).length ?? 0
 
-  useEffect(() => {
+  const checkAlerts = () => {
     if (!events) return
-    const newUnread = events.find(e => !e.acknowledged && !seenEventIds.has(e.id))
+    const REMIND_MS = 60 * 1000
+    const now = Date.now()
+    const newUnread = events.find(e => {
+      if (e.acknowledged) return false
+      const dismissedAt = dismissedAlerts[e.id]
+      return !dismissedAt || (now - dismissedAt) >= REMIND_MS
+    })
     if (newUnread && !emergencyEvent) {
       setEmergencyEvent(newUnread)
-      setSeenEventIds(prev => new Set([...prev, newUnread.id]))
     }
-  }, [events])
+  }
+
+  useEffect(() => { checkAlerts() }, [events, dismissedAlerts])
+
+  useEffect(() => {
+    const interval = setInterval(checkAlerts, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [events, dismissedAlerts, emergencyEvent])
 
   const acknowledgeAlert = async id => {
     try {
@@ -214,7 +233,12 @@ export default function PublicLayout() {
       </div>
 
       {emergencyEvent && (
-        <GlobalAlertPopup event={emergencyEvent} onDismiss={() => setEmergencyEvent(null)} onAcknowledge={acknowledgeAlert}/>
+        <GlobalAlertPopup event={emergencyEvent} onDismiss={() => {
+          const updated = { ...dismissedAlerts, [emergencyEvent.id]: Date.now() }
+          setDismissedAlerts(updated)
+          try { sessionStorage.setItem('dismissedAlerts', JSON.stringify(updated)) } catch {}
+          setEmergencyEvent(null)
+        }} onAcknowledge={acknowledgeAlert}/>
       )}
     </div>
   )
