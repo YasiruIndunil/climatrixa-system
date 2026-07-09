@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
-from typing import List
+from typing import List, Optional
 import json
 from datetime import datetime, timezone
 from app.models.schemas import ReadingCreate, ReadingResponse, LatestReadingsResponse
 from app.core.database import db
+from app.core.security import require_admin
 from app.services.alert_service import check_and_trigger_alerts
 from app.core.timezone import utc_to_slst, format_slst
 from fastapi.responses import StreamingResponse, Response
