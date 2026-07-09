@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { useAuth } from '../../context/useAuth'
 import { useTheme } from '../../context/ThemeContext'
 import { useAlertWS } from '../../components/Toast'
 import api from '../../utils/api'
-import { Radio, Bell, Activity, ThermometerSun, Droplets, Wind, Gauge } from 'lucide-react'
+import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge } from 'lucide-react'
 
 function MetricCard({ label, value, unit, icon: Icon, color, dark }) {
   const colors = {
@@ -35,7 +35,18 @@ function AQIBadge({ status }) {
   return <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${map[status] || 'bg-gray-100 text-gray-500'}`}>{status || 'Unknown'}</span>
 }
 
-function SensorReadingCard({ reading, dark }) {
+const PARAM_LABELS = [
+  { key: 'temperature', label: 'Temp',     icon: ThermometerSun },
+  { key: 'humidity',    label: 'Humidity', icon: Droplets },
+  { key: 'aqi',         label: 'AQI',      icon: Wind },
+  { key: 'pressure',    label: 'Pressure', icon: Gauge },
+]
+
+function SensorReadingCard({ reading, subscription, dark }) {
+  // Which params have alerts on?
+  const enabledParams = PARAM_LABELS.filter(p => subscription?.[p.key] === true)
+  const anyEnabled = enabledParams.length > 0
+
   return (
     <div className={`rounded-2xl border shadow-sm overflow-hidden ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
       <div className={`px-5 py-4 border-b flex items-center justify-between ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
@@ -59,6 +70,25 @@ function SensorReadingCard({ reading, dark }) {
         ].map(m => (
           <MetricCard key={m.label} {...m} dark={dark}/>
         ))}
+      </div>
+      {/* Alert subscription status row */}
+      <div className={`px-5 pb-4 flex items-center gap-2 flex-wrap`}>
+        {anyEnabled ? (
+          <>
+            <Bell size={12} className="text-teal-500 shrink-0"/>
+            <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Alerts on:</span>
+            {enabledParams.map(p => (
+              <span key={p.key} className={`text-xs px-2 py-0.5 rounded-full font-medium ${dark ? 'bg-teal-500/15 text-teal-400' : 'bg-teal-50 text-teal-600'}`}>
+                {p.label}
+              </span>
+            ))}
+          </>
+        ) : (
+          <>
+            <BellOff size={12} className={dark ? 'text-gray-600' : 'text-gray-400'}/>
+            <span className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>No alerts enabled</span>
+          </>
+        )}
       </div>
       {reading.recorded_at_display && (
         <div className={`px-5 pb-4 text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
@@ -95,6 +125,27 @@ export default function Dashboard() {
   const assignedSensorIds = new Set(mySensors?.map(row => row.sensors?.id).filter(Boolean) || [])
   const myReadings = readings?.filter(r => assignedSensorIds.has(r.sensor_id)) ?? []
   const unreadCount = alerts?.filter(a => !a.acknowledged).length ?? 0
+
+  // Fetch subscriptions for each assigned sensor
+  const sensorIdList = [...assignedSensorIds]
+  const subscriptionQueries = useQueries({
+    queries: sensorIdList.map(sensorId => ({
+      queryKey: ['subscriptions', sensorId, user?.id],
+      queryFn: async () => {
+        try {
+          const r = await api.get(`/subscriptions/${user.id}/${sensorId}`)
+          return { sensorId, data: r.data }
+        } catch {
+          return { sensorId, data: null }
+        }
+      },
+      enabled: !!user?.id,
+      retry: false,
+    }))
+  })
+  const subscriptionMap = Object.fromEntries(
+    subscriptionQueries.map(q => [q.data?.sensorId, q.data?.data]).filter(([k]) => k)
+  )
 
   const today = new Date().toLocaleDateString('en-LK', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Colombo'
@@ -160,7 +211,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} dark={dark}/>)}
+          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} subscription={subscriptionMap[r.sensor_id]} dark={dark}/>)}
         </div>
       )}
     </div>
