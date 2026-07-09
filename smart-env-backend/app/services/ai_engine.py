@@ -43,6 +43,22 @@ def _upload_model(model, filename: str):
     )
 
 
+def _upload_series(series: pd.Series, filename: str):
+    """Save a pandas Series (training data) to Supabase Storage."""
+    buf = io.BytesIO()
+    joblib.dump(series, buf)
+    buf.seek(0)
+    try:
+        db.storage.from_(BUCKET).remove([filename])
+    except Exception:
+        pass
+    db.storage.from_(BUCKET).upload(
+        path=filename,
+        file=buf.getvalue(),
+        file_options={"content-type": "application/octet-stream"}
+    )
+
+
 def _download_model(filename: str):
     if filename in _model_cache:
         return _model_cache[filename]
@@ -133,24 +149,14 @@ def train_models(sensor_id: str) -> dict:
         if param not in df.columns:
             continue
         series = df[param].dropna()
-
         try:
-            # Holt-Winters with daily seasonality
-            # Each reading is 10 min, so 144 readings = 1 day
-            seasonal_periods = min(144, len(series) // 2)
-            model = ExponentialSmoothing(
-                series,
-                trend="add",
-                seasonal="add" if len(series) >= seasonal_periods * 2 else None,
-                seasonal_periods=seasonal_periods if len(series) >= seasonal_periods * 2 else None,
-                initialization_method="estimated",
-            ).fit(optimized=True)
-
-            _upload_model(model, f"forecast_{sensor_id}_{param}.pkl")
+            # Save the training series — refit on each forecast request
+            # This avoids statsmodels pickle/unpickle compatibility issues
+            _upload_series(series, f"forecast_{sensor_id}_{param}.pkl")
             trained.append(f"forecast_{param}")
-            print(f"[AI] Trained {param} model")
+            print(f"[AI] Saved training data for {param} ({len(series)} points)")
         except Exception as e:
-            print(f"[AI] Error training {param}: {e}")
+            print(f"[AI] Error saving {param}: {e}")
 
     # Train Isolation Forest
     features = df[["temperature", "humidity", "aqi", "pressure"]].dropna().values
@@ -185,7 +191,16 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
     for param in ["temperature", "humidity", "aqi", "pressure"]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
-            model = _download_model(filename)
+            series = _download_model(filename)
+            # Refit ExponentialSmoothing on loaded series
+            seasonal_periods = min(144, len(series) // 2)
+            model = ExponentialSmoothing(
+                series,
+                trend="add",
+                seasonal="add" if len(series) >= seasonal_periods * 2 else None,
+                seasonal_periods=seasonal_periods if len(series) >= seasonal_periods * 2 else None,
+                initialization_method="estimated",
+            ).fit(optimized=True)
             steps = hours_ahead * 6
             pred = model.forecast(steps)
             for h in range(1, hours_ahead + 1):
@@ -198,7 +213,6 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                 forecast_rows[h][param] = val
         except Exception as e:
             print(f"[AI] Forecast fallback for {param}: {e}")
-            # Fallback to linear trend
             df = _get_recent_readings(sensor_id, n=72)
             if not df.empty and param in df.columns and df[param].notna().sum() > 5:
                 x = np.arange(len(df))
@@ -211,7 +225,6 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                     if param == "pressure": val = max(900, min(1100, val))
                     forecast_rows[h][param] = val
             else:
-                # Last resort — use mean of recent readings
                 df2 = _get_recent_readings(sensor_id, n=20)
                 default = round(float(df2[param].mean()), 1) if not df2.empty and param in df2.columns else 0.0
                 for h in range(1, hours_ahead + 1):
