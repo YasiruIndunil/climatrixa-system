@@ -214,36 +214,60 @@ export default function SensorDetail() {
         <TrendingUp size={15} className="text-teal-500"/> AI Forecast — Next 24 hours
       </h2>
       <div className={`${card} mb-6 overflow-hidden`}>
-        {forecast ? (
+        {forecast && forecast.forecast?.length > 0 ? (
           <div className="p-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Anomaly banner */}
+            {forecast.anomaly_detected && (
+              <div className="mb-4 px-4 py-3 rounded-xl bg-orange-50 border border-orange-200 flex items-center gap-2">
+                <span className="text-orange-500 text-lg">⚠</span>
+                <div>
+                  <div className="text-sm font-semibold text-orange-700">Anomaly detected in current readings</div>
+                  {forecast.anomaly_description && <div className="text-xs text-orange-600 mt-0.5">{forecast.anomaly_description}</div>}
+                </div>
+              </div>
+            )}
+            {/* Next 6 hours summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {PARAMS.map(p => {
-                const f = forecast[p.key]
+                const next6 = forecast.forecast.slice(0, 6).map(f => f[p.key]).filter(v => v != null)
+                const avg = next6.length ? (next6.reduce((a, b) => a + b, 0) / next6.length).toFixed(1) : '-'
+                const min = next6.length ? Math.min(...next6).toFixed(1) : '-'
+                const max = next6.length ? Math.max(...next6).toFixed(1) : '-'
                 return (
                   <div key={p.key} className={`rounded-xl p-3 ${colors[p.color]}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <p.icon size={13}/>
                       <span className="text-xs font-semibold">{p.label}</span>
                     </div>
-                    {f ? (
-                      <>
-                        <div className="text-lg font-bold">{f.predicted?.toFixed(1)}{p.unit}</div>
-                        <div className="text-xs opacity-70">
-                          {f.lower?.toFixed(1)} – {f.upper?.toFixed(1)}{p.unit} range
-                        </div>
-                        {f.anomaly && (
-                          <div className="text-xs font-bold text-orange-500 mt-1">⚠ Anomaly predicted</div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-sm opacity-60">No data</div>
-                    )}
+                    <div className="text-lg font-bold">{avg}{p.unit}</div>
+                    <div className="text-xs opacity-70">Next 6h avg · {min}–{max}{p.unit}</div>
                   </div>
                 )
               })}
             </div>
+            {/* Hourly forecast table */}
+            <div className={`rounded-xl overflow-hidden border ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+              <div className={`grid grid-cols-5 text-xs font-semibold px-3 py-2 ${dark ? 'bg-gray-800 text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
+                <span>Hour</span>
+                <span>Temp</span>
+                <span>Humidity</span>
+                <span>AQI</span>
+                <span>Pressure</span>
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {forecast.forecast.map(f => (
+                  <div key={f.hours_ahead} className={`grid grid-cols-5 text-xs px-3 py-1.5 border-t ${dark ? 'border-gray-800 hover:bg-gray-800/50' : 'border-gray-50 hover:bg-gray-50'}`}>
+                    <span className={dark ? 'text-gray-400' : 'text-gray-500'}>+{f.hours_ahead}h</span>
+                    <span className="text-red-500 font-medium">{f.temperature?.toFixed(1)}°C</span>
+                    <span className="text-blue-500 font-medium">{f.humidity?.toFixed(1)}%</span>
+                    <span className="text-teal-500 font-medium">{f.aqi?.toFixed(0)}</span>
+                    <span className="text-purple-500 font-medium">{f.pressure?.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             {forecast.generated_at && (
-              <p className={`text-xs mt-3 ${sub}`}>Forecast generated: {new Date(forecast.generated_at).toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}</p>
+              <p className={`text-xs mt-3 ${sub}`}>Generated: {new Date(forecast.generated_at).toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}</p>
             )}
           </div>
         ) : (
