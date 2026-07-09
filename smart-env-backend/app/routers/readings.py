@@ -6,6 +6,9 @@ from app.models.schemas import ReadingCreate, ReadingResponse, LatestReadingsRes
 from app.core.database import db
 from app.services.alert_service import check_and_trigger_alerts
 from app.core.timezone import utc_to_slst, format_slst
+from fastapi.responses import StreamingResponse, Response
+from io import StringIO
+import csv
 
 router = APIRouter(prefix="/readings", tags=["Readings"])
 
@@ -156,3 +159,49 @@ async def live_readings_ws(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+
+
+@router.get("/export")
+async def export_readings(
+    sensor_id: Optional[str] = None,
+    from_: Optional[str] = Query(None, alias="from"),
+    to: Optional[str] = None,
+    format: str = "csv",
+    admin: dict = Depends(require_admin)
+):
+    query = db.table("readings").select("*")
+    if sensor_id:
+        query = query.eq("sensor_id", sensor_id)
+    if from_:
+        query = query.gte("recorded_at", from_)
+    if to:
+        query = query.lte("recorded_at", to)
+    result = query.order("recorded_at", desc=True).execute()
+    rows = result.data or []
+
+    if format == "pdf":
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+        from reportlab.lib import colors
+        from io import BytesIO
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4)
+        data = [["Sensor ID", "Temperature", "Humidity", "AQI", "Pressure", "Recorded At"]]
+        for r in rows:
+            data.append([r.get("sensor_id",""), r.get("temperature",""), r.get("humidity",""), r.get("aqi",""), r.get("pressure",""), r.get("recorded_at","")])
+        table = Table(data)
+        table.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.teal),("TEXTCOLOR",(0,0),(-1,0),colors.white),("GRID",(0,0),(-1,-1),0.5,colors.grey)]))
+        doc.build([table])
+        buf.seek(0)
+        return Response(content=buf.read(), media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=readings.pdf"})
+
+    # CSV
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["sensor_id","temperature","humidity","aqi","pressure","recorded_at"])
+    for r in rows:
+        writer.writerow([r.get("sensor_id"), r.get("temperature"), r.get("humidity"), r.get("aqi"), r.get("pressure"), r.get("recorded_at")])
+    output.seek(0)
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=readings.csv"})

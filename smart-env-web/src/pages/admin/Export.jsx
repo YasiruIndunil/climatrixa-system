@@ -9,43 +9,82 @@ import api from '../../utils/api'
 export default function Export() {
   const { dark } = useTheme()
   const toast = useToast()
-  const [form, setForm] = useState({ sensor_id: '', date_from: '', date_to: '', format: 'csv' })
-  const [exporting, setExporting] = useState(false)
+
+  const [readings, setReadings] = useState({ sensor_id: '', date_from: '', date_to: '', format: 'csv' })
+  const [alerts, setAlerts]     = useState({ sensor_id: '', date_from: '', date_to: '', format: 'csv' })
+  const [exportingR, setExportingR] = useState(false)
+  const [exportingA, setExportingA] = useState(false)
 
   const { data: sensors } = useQuery({
     queryKey: ['sensors'],
     queryFn: () => api.get('/sensors/').then(r => r.data)
   })
 
-  const handleExport = async () => {
-    setExporting(true)
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(new Blob([blob]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleReadings = async () => {
+    setExportingR(true)
     try {
       const params = new URLSearchParams()
-      if (form.sensor_id) params.append('sensor_id', form.sensor_id)
-      if (form.date_from) params.append('from', form.date_from)
-      if (form.date_to) params.append('to', form.date_to)
+      if (readings.sensor_id) params.append('sensor_id', readings.sensor_id)
+      if (readings.date_from) params.append('from', readings.date_from)
+      if (readings.date_to)   params.append('to', readings.date_to)
+      params.append('format', readings.format)
       const res = await api.get(`/readings/export?${params}`, { responseType: 'blob' })
-      const url = window.URL.createObjectURL(new Blob([res.data]))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `climatrixa_readings_${new Date().toISOString().slice(0, 10)}.csv`
-      a.click()
-      window.URL.revokeObjectURL(url)
-      toast('Export downloaded successfully')
+      const ext = readings.format === 'pdf' ? 'pdf' : 'csv'
+      downloadBlob(res.data, `readings_${new Date().toISOString().slice(0,10)}.${ext}`)
+      toast('Readings exported successfully')
     } catch {
-      toast('Export endpoint not yet available', 'error')
-    } finally { setExporting(false) }
+      toast('Failed to export readings', 'error')
+    } finally { setExportingR(false) }
+  }
+
+  const handleAlerts = async () => {
+    setExportingA(true)
+    try {
+      const params = new URLSearchParams()
+      if (alerts.sensor_id) params.append('sensor_id', alerts.sensor_id)
+      if (alerts.date_from) params.append('from', alerts.date_from)
+      if (alerts.date_to)   params.append('to', alerts.date_to)
+      params.append('format', alerts.format)
+      const res = await api.get(`/alerts/events/export?${params}`, { responseType: 'blob' })
+      const ext = alerts.format === 'pdf' ? 'pdf' : 'csv'
+      downloadBlob(res.data, `alert_events_${new Date().toISOString().slice(0,10)}.${ext}`)
+      toast('Alert events exported successfully')
+    } catch {
+      toast('Failed to export alert events', 'error')
+    } finally { setExportingA(false) }
   }
 
   const inputClass = `w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all ${
-    dark
-      ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
-      : 'bg-gray-50 border-gray-200 text-gray-900'
+    dark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
   }`
+
+  const FormatToggle = ({ value, onChange }) => (
+    <div className="flex gap-3">
+      {[{ v: 'csv', l: 'CSV' }, { v: 'pdf', l: 'PDF Report' }].map(({ v, l }) => (
+        <label key={v} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+          value === v
+            ? 'border-teal-500 bg-teal-50 text-teal-700'
+            : dark ? 'border-gray-700 text-gray-400 hover:border-gray-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+        }`}>
+          <input type="radio" className="sr-only" value={v} checked={value === v} onChange={() => onChange(v)} />
+          {l}
+        </label>
+      ))}
+    </div>
+  )
 
   return (
     <PageWrapper>
-      <PageTitle title="Export data" subtitle="Download sensor readings and alert events as CSV" />
+      <PageTitle title="Export data" subtitle="Download sensor readings and alert events as CSV or PDF" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -63,39 +102,28 @@ export default function Export() {
           <div className="px-5 py-5 space-y-4">
             <div>
               <FieldLabel>Sensor</FieldLabel>
-              <ThemedSelect value={form.sensor_id} onChange={e => setForm({...form, sensor_id: e.target.value})}>
+              <ThemedSelect value={readings.sensor_id} onChange={e => setReadings(f => ({ ...f, sensor_id: e.target.value }))}>
                 <option value="">All sensors</option>
-                {sensors?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {sensors?.map(s => <option key={s.id} value={s.id}>{s.name} — {s.location}</option>)}
               </ThemedSelect>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FieldLabel>From date</FieldLabel>
-                <input type="date" className={inputClass} value={form.date_from} onChange={e => setForm({...form, date_from: e.target.value})} />
+                <input type="date" className={inputClass} value={readings.date_from} onChange={e => setReadings(f => ({ ...f, date_from: e.target.value }))} />
               </div>
               <div>
                 <FieldLabel>To date</FieldLabel>
-                <input type="date" className={inputClass} value={form.date_to} onChange={e => setForm({...form, date_to: e.target.value})} />
+                <input type="date" className={inputClass} value={readings.date_to} onChange={e => setReadings(f => ({ ...f, date_to: e.target.value }))} />
               </div>
             </div>
             <div>
               <FieldLabel>Format</FieldLabel>
-              <div className="flex gap-3">
-                {['csv', 'pdf'].map(f => (
-                  <label key={f} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
-                    form.format === f
-                      ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
-                      : dark ? 'border-gray-700 text-gray-400 hover:border-gray-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}>
-                    <input type="radio" className="sr-only" value={f} checked={form.format === f} onChange={() => setForm({...form, format: f})} />
-                    {f.toUpperCase()}
-                  </label>
-                ))}
-              </div>
+              <FormatToggle value={readings.format} onChange={v => setReadings(f => ({ ...f, format: v }))} />
             </div>
-            <PrimaryButton onClick={handleExport} disabled={exporting} className="w-full justify-center">
+            <PrimaryButton onClick={handleReadings} disabled={exportingR} className="w-full justify-center">
               <Download size={16} />
-              {exporting ? 'Exporting...' : 'Download readings'}
+              {exportingR ? 'Exporting...' : `Download readings ${readings.format.toUpperCase()}`}
             </PrimaryButton>
           </div>
         </Card>
@@ -112,34 +140,34 @@ export default function Export() {
             </div>
           </CardHeader>
           <div className="px-5 py-5 space-y-4">
+            <div>
+              <FieldLabel>Sensor</FieldLabel>
+              <ThemedSelect value={alerts.sensor_id} onChange={e => setAlerts(f => ({ ...f, sensor_id: e.target.value }))}>
+                <option value="">All sensors</option>
+                {sensors?.map(s => <option key={s.id} value={s.id}>{s.name} — {s.location}</option>)}
+              </ThemedSelect>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FieldLabel>From date</FieldLabel>
-                <input type="date" className={inputClass} />
+                <input type="date" className={inputClass} value={alerts.date_from} onChange={e => setAlerts(f => ({ ...f, date_from: e.target.value }))} />
               </div>
               <div>
                 <FieldLabel>To date</FieldLabel>
-                <input type="date" className={inputClass} />
+                <input type="date" className={inputClass} value={alerts.date_to} onChange={e => setAlerts(f => ({ ...f, date_to: e.target.value }))} />
               </div>
             </div>
             <div>
               <FieldLabel>Format</FieldLabel>
-              <div className="flex gap-3">
-                {['csv', 'pdf'].map(f => (
-                  <label key={f} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
-                    dark ? 'border-gray-700 text-gray-400 hover:border-gray-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}>
-                    {f.toUpperCase()}
-                  </label>
-                ))}
-              </div>
+              <FormatToggle value={alerts.format} onChange={v => setAlerts(f => ({ ...f, format: v }))} />
             </div>
             <button
-              onClick={() => toast('Alert events export — coming soon', 'error')}
-              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              onClick={handleAlerts}
+              disabled={exportingA}
+              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-semibold transition-colors"
             >
               <Download size={16} />
-              Download alert events
+              {exportingA ? 'Exporting...' : `Download alert events ${alerts.format.toUpperCase()}`}
             </button>
           </div>
         </Card>
