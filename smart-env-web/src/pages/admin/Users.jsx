@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, UserCheck, UserX, Shield, User, Link, Edit2, Search, X } from 'lucide-react'
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
+import { Plus, UserCheck, UserX, Shield, User, Link, Edit2, Search, X, Bell, BellOff } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useToast } from '../../components/Toast'
 import PageWrapper, { Card, CardHeader, PageTitle, ThemedInput, ThemedSelect, PrimaryButton, GhostButton, FieldLabel, Tooltip } from '../../components/PageWrapper'
@@ -80,11 +80,15 @@ function CreateUserModal({ onClose }) {
   )
 }
 
+const SUB_PARAMS = ['temperature', 'humidity', 'aqi', 'pressure']
+
 function AssignModal({ user, onClose }) {
   const { dark } = useTheme()
   const toast = useToast()
+  const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [expandedSensor, setExpandedSensor] = useState(null)
 
   const { data: allSensors } = useQuery({ queryKey: ['sensors'], queryFn: () => api.get('/sensors/').then(r => r.data) })
   const { data: assigned, refetch } = useQuery({
@@ -95,12 +99,33 @@ function AssignModal({ user, onClose }) {
   const assignedIds = new Set(assigned?.map(row => row.sensors?.id).filter(Boolean) || [])
   const filtered = allSensors?.filter(s => s.is_active && (!search || s.name.toLowerCase().includes(search.toLowerCase()) || s.location.toLowerCase().includes(search.toLowerCase())))
 
+  // Fetch subscriptions for all assigned sensors
+  // Use assigned data directly so queries update when assignment changes
+  const assignedSensorIds = (assigned || []).map(row => row.sensors?.id).filter(Boolean)
+  const subQueries = useQueries({
+    queries: assignedSensorIds.map(sensorId => ({
+      queryKey: ['subscriptions', sensorId, user.id],
+      queryFn: async () => {
+        try {
+          const r = await api.get(`/subscriptions/${user.id}/${sensorId}`)
+          return { sensorId, data: r.data }
+        } catch { return { sensorId, data: null } }
+      },
+      retry: false,
+      staleTime: 0,
+    }))
+  })
+  const subMap = Object.fromEntries(
+    subQueries.filter(q => q.data?.sensorId).map(q => [q.data.sensorId, q.data.data])
+  )
+
   const toggle = async sensorId => {
     setSaving(true)
     try {
       if (assignedIds.has(sensorId)) {
         await api.delete(`/access/sensors/${sensorId}/users/${user.id}`)
         toast('Sensor removed')
+        if (expandedSensor === sensorId) setExpandedSensor(null)
       } else {
         await api.post(`/access/sensors/${sensorId}/users/${user.id}`)
         toast('Sensor assigned')
@@ -110,24 +135,80 @@ function AssignModal({ user, onClose }) {
     finally { setSaving(false) }
   }
 
+  const toggleSub = async (sensorId, param) => {
+    const current = subMap[sensorId]
+    const currently = current?.[param] === true
+    try {
+      if (current) {
+        await api.patch(`/subscriptions/${user.id}/${sensorId}`, {
+          temperature: param === 'temperature' ? !currently : (current.temperature ?? false),
+          humidity:    param === 'humidity'    ? !currently : (current.humidity    ?? false),
+          aqi:         param === 'aqi'         ? !currently : (current.aqi         ?? false),
+          pressure:    param === 'pressure'    ? !currently : (current.pressure    ?? false),
+        })
+      } else {
+        await api.post(`/subscriptions/${user.id}/${sensorId}`, {
+          temperature: param === 'temperature',
+          humidity:    param === 'humidity',
+          aqi:         param === 'aqi',
+          pressure:    param === 'pressure',
+        })
+      }
+      queryClient.invalidateQueries({ queryKey: ['subscriptions', sensorId, user.id] })
+      toast(`${param} alert ${currently ? 'disabled' : 'enabled'}`)
+    } catch { toast('Failed to update subscription', 'error') }
+  }
+
   return (
     <Modal title={`Assign sensors`} subtitle={`For ${user.full_name || user.email}`} onClose={onClose}>
       <div className="mb-3">
         <ThemedInput placeholder="Search sensors..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
-      <div className="space-y-1.5 max-h-64 overflow-y-auto">
-        {filtered?.map(sensor => (
-          <label key={sensor.id} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
-            dark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
-          }`}>
-            <input type="checkbox" checked={assignedIds.has(sensor.id)} onChange={() => toggle(sensor.id)}
-              disabled={saving} className="w-4 h-4 accent-teal-600" />
-            <div>
-              <div className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>{sensor.name}</div>
-              <div className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{sensor.location}</div>
+      <div className="space-y-1.5 max-h-80 overflow-y-auto">
+        {filtered?.map(sensor => {
+          const isAssigned = assignedIds.has(sensor.id)
+          const sub = subMap[sensor.id]
+          const isExpanded = expandedSensor === sensor.id && isAssigned
+          return (
+            <div key={sensor.id} className={`rounded-xl border transition-colors ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+              <label className={`flex items-center gap-3 p-3 cursor-pointer ${dark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
+                <input type="checkbox" checked={isAssigned} onChange={() => toggle(sensor.id)}
+                  disabled={saving} className="w-4 h-4 accent-teal-600" />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>{sensor.name}</div>
+                  <div className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{sensor.location}</div>
+                </div>
+                {isAssigned && (
+                  <button type="button"
+                    onClick={e => { e.preventDefault(); setExpandedSensor(isExpanded ? null : sensor.id) }}
+                    className={`p-1.5 rounded-lg transition-colors ${dark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                    title="Manage alert subscriptions">
+                    <Bell size={13} className={SUB_PARAMS.some(p => sub?.[p]) ? 'text-teal-500' : ''}/>
+                  </button>
+                )}
+              </label>
+              {isExpanded && (
+                <div className={`px-4 pb-3 border-t ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wide pt-2 pb-1.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Alert subscriptions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SUB_PARAMS.map(param => {
+                      const on = sub?.[param] === true
+                      return (
+                        <button key={param} type="button" onClick={() => toggleSub(sensor.id, param)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            on ? 'bg-teal-500 border-teal-500 text-white' : dark ? 'border-gray-700 text-gray-400 hover:border-teal-500' : 'border-gray-200 text-gray-500 hover:border-teal-400'
+                          }`}>
+                          {on ? <Bell size={10}/> : <BellOff size={10}/>}
+                          {param.charAt(0).toUpperCase() + param.slice(1)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          </label>
-        ))}
+          )
+        })}
         {filtered?.length === 0 && <p className={`text-sm text-center py-4 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>No sensors found</p>}
       </div>
       <div className="mt-4">

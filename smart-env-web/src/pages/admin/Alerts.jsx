@@ -189,12 +189,25 @@ function RuleModal({ onClose }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.post('/alerts/rules/', { ...form, threshold_value: parseFloat(form.threshold_value) })
+      const payload = {
+        sensor_id: form.sensor_id,
+        alert_type: form.alert_type,
+        threshold_value: parseFloat(form.threshold_value),
+        is_active: form.is_active,
+        // Send null if empty — backend expects EmailStr or null, not empty string
+        notify_email: form.notify_email.trim() || null,
+      }
+      await api.post('/alerts/rules/', payload)
       queryClient.invalidateQueries(['alert-rules'])
       toast('Alert rule created successfully')
       onClose()
     } catch (err) {
-      toast(err.response?.data?.detail || 'Failed to create rule', 'error')
+      const detail = err.response?.data?.detail
+      // FastAPI 422 returns detail as array of objects — extract messages
+      const msg = Array.isArray(detail)
+        ? detail.map(d => d.msg).join(', ')
+        : (typeof detail === 'string' ? detail : 'Failed to create rule')
+      toast(msg, 'error')
     } finally { setSaving(false) }
   }
 
