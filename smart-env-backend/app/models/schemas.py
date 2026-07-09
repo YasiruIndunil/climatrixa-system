@@ -96,6 +96,7 @@ class SensorResponse(BaseModel):
     longitude: Optional[float]
     industry_profile: Optional[str]
     is_active: bool
+    mac_address: Optional[str] = None      
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
     created_at: datetime
