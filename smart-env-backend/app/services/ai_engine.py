@@ -200,7 +200,7 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                     trend="add",
                     seasonal=None,
                     initialization_method="estimated",
-                ).fit(optimized=True, disp=False)
+                ).fit(optimized=True)
             else:
                 model = ExponentialSmoothing(
                     series,
@@ -208,7 +208,7 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
                     seasonal="add" if has_season else None,
                     seasonal_periods=seasonal_periods if has_season else None,
                     initialization_method="estimated",
-                ).fit(optimized=True, disp=False)
+                ).fit(optimized=True)
 
             steps = hours_ahead * 6
             pred = model.forecast(steps)
@@ -226,7 +226,7 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
             df = _get_recent_readings(sensor_id, n=72)
             if not df.empty and param in df.columns and df[param].notna().sum() > 5:
                 x = np.arange(len(df))
-                y = df[param].fillna(method='ffill').values
+                y = df[param].ffill().values
                 coeffs = np.polyfit(x, y, deg=1)
                 future_x = np.arange(len(df), len(df) + hours_ahead)
                 predicted = np.polyval(coeffs, future_x)
