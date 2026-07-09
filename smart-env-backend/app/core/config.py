@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "Smart Environmental Monitoring API"
     app_version: str = "1.0.0"
     debug: bool = True
-    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+    allowed_origins: str = "http://localhost:3000,http://localhost:5173,https://climatrixa-system.vercel.app"
 
     # Supabase
     supabase_url: str
