@@ -147,6 +147,7 @@ class PredictionPoint(BaseModel):
     temperature: float
     humidity: float
     aqi: float
+    pressure: Optional[float] = None
 
 
 class PredictionResponse(BaseModel):
