@@ -6,6 +6,7 @@ import { useAlertWS } from '../../components/Toast'
 import api from '../../utils/api'
 import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge, TrendingUp, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { LoadingSpinner } from '../../components/PageWrapper'
 
 function MetricCard({ label, value, unit, icon: Icon, color, dark, predicted }) {
   const colors = {
@@ -200,7 +201,7 @@ function ForecastChartCard({ sensorName, forecast, dark }) {
       {/* Chart */}
       <div className="px-2 pt-2">
         <ResponsiveContainer width="100%" height={140}>
-          <AreaChart data={chartData} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={`grad-${activeParam}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={param.stroke} stopOpacity={0.35}/>
@@ -213,7 +214,7 @@ function ForecastChartCard({ sensorName, forecast, dark }) {
               tick={{ fontSize: 10, fill: dark ? '#6b7280' : '#9ca3af' }}
               axisLine={false}
               tickLine={false}
-              width={44}
+              width={50}
               domain={yDomain}
               tickFormatter={tickFmt}
             />
@@ -362,8 +363,8 @@ export default function Dashboard() {
       </div>
 
       {isLoading ? (
-        <div className={`rounded-2xl border p-10 text-center text-sm ${dark ? 'bg-gray-900 border-gray-800 text-gray-500' : 'bg-white border-gray-100 text-gray-400'}`}>
-          Loading sensor data...
+        <div className={`rounded-2xl border ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+          <LoadingSpinner label="Loading sensor data..."/>
         </div>
       ) : myReadings.length === 0 ? (
         <div className={`rounded-2xl border p-10 text-center ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>

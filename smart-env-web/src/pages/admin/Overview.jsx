@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
-import { Wifi, Users, Bell, Activity, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { useQuery, useQueries } from '@tanstack/react-query'
+import { Wifi, Users, Bell, Activity, AlertTriangle, TrendingUp, TrendingDown, Minus, Calendar, CheckCircle, XCircle, Sparkles } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
+import { LoadingSpinner } from '../../components/PageWrapper'
 import api from '../../utils/api'
 
 function StatCard({ icon: Icon, label, value, sub, color, dark }) {
@@ -38,7 +39,7 @@ function AQIBadge({ status }) {
   )
 }
 
-function MetricPill({ label, value, unit, color, dark }) {
+function MetricPill({ label, value, unit, color, dark, predicted }) {
   const colors = {
     red: dark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600',
     blue: dark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
@@ -49,6 +50,11 @@ function MetricPill({ label, value, unit, color, dark }) {
     <div className={`rounded-xl px-3 py-2 text-center ${colors[color]}`}>
       <div className="text-base font-bold">{value}{unit}</div>
       <div className="text-xs opacity-70 mt-0.5">{label}</div>
+      {predicted != null && (
+        <div className="flex items-center justify-center gap-0.5 text-[10px] font-semibold mt-1 pt-1 border-t border-current/10">
+          <Sparkles size={8}/> {predicted}{unit} <span className="opacity-60 font-normal">in 1h</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -57,9 +63,24 @@ export default function Overview() {
   const { dark } = useTheme()
 
   const { data: sensors } = useQuery({ queryKey: ['sensors'], queryFn: () => api.get('/sensors/').then(r => r.data), refetchInterval: 60000 })
-  const { data: readings } = useQuery({ queryKey: ['latest-readings'], queryFn: () => api.get('/readings/latest').then(r => r.data), refetchInterval: 30000 })
+  const { data: readings, isLoading: readingsLoading } = useQuery({ queryKey: ['latest-readings'], queryFn: () => api.get('/readings/latest').then(r => r.data), refetchInterval: 30000 })
+
+  // Fetch next-hour AI prediction for every active sensor
+  const activeSensorIds = (sensors || []).filter(s => s.is_active).map(s => s.id)
+  const forecastQueries = useQueries({
+    queries: activeSensorIds.map(id => ({
+      queryKey: ['forecast', id],
+      queryFn: () => api.get(`/ai/forecast/${id}`).then(r => r.data),
+      retry: false,
+      staleTime: 5 * 60 * 1000,
+    }))
+  })
+  const forecastMap = Object.fromEntries(
+    activeSensorIds.map((id, i) => [id, forecastQueries[i]?.data])
+  )
   const { data: alerts } = useQuery({ queryKey: ['alert-events'], queryFn: () => api.get('/alerts/events').then(r => r.data), refetchInterval: 30000 })
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/auth/users/').then(r => r.data), refetchInterval: 120000 })
+  const { data: scheduleLogs } = useQuery({ queryKey: ['schedule-logs'], queryFn: () => api.get('/ai/schedule/logs?limit=5').then(r => r.data), refetchInterval: 60000 })
 
   const activeSensors = sensors?.filter(s => s.is_active)?.length ?? 0
   const totalUsers = users?.length ?? 0
@@ -101,7 +122,11 @@ export default function Overview() {
         </div>
 
         <div className={`divide-y ${dark ? 'divide-gray-800' : 'divide-gray-50'}`}>
-          {readings?.length > 0 ? readings.map(r => (
+          {readingsLoading ? (
+            <LoadingSpinner label="Loading live readings..."/>
+          ) : readings?.length > 0 ? readings.map(r => {
+            const nextHour = forecastMap[r.sensor_id]?.forecast?.find(f => f.hours_ahead === 1)
+            return (
             <div key={r.sensor_id} className={`px-5 py-4 hover:${dark ? 'bg-gray-800/50' : 'bg-gray-50'} transition-colors`}>
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -113,10 +138,10 @@ export default function Overview() {
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                <MetricPill label="Temp" value={r.temperature} unit="°C" color="red" dark={dark} />
-                <MetricPill label="Humidity" value={r.humidity} unit="%" color="blue" dark={dark} />
-                <MetricPill label="AQI" value={r.aqi} unit="" color="teal" dark={dark} />
-                <MetricPill label="Pressure" value={r.pressure} unit=" hPa" color="purple" dark={dark} />
+                <MetricPill label="Temp" value={r.temperature} unit="°C" color="red" dark={dark} predicted={nextHour?.temperature} />
+                <MetricPill label="Humidity" value={r.humidity} unit="%" color="blue" dark={dark} predicted={nextHour?.humidity} />
+                <MetricPill label="AQI" value={r.aqi} unit="" color="teal" dark={dark} predicted={nextHour?.aqi} />
+                <MetricPill label="Pressure" value={r.pressure} unit=" hPa" color="purple" dark={dark} predicted={nextHour?.pressure} />
               </div>
               {r.recorded_at_display && (
                 <div className={`text-xs mt-2 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
@@ -124,7 +149,7 @@ export default function Overview() {
                 </div>
               )}
             </div>
-          )) : (
+          )}) : (
             <div className={`px-5 py-10 text-center ${dark ? 'text-gray-600' : 'text-gray-300'} text-sm`}>
               No readings yet — waiting for sensor data
             </div>
@@ -147,8 +172,11 @@ export default function Overview() {
             <div key={a.id} className={`px-5 py-3 flex items-start gap-3 ${!a.acknowledged ? (dark ? 'bg-orange-500/5' : 'bg-orange-50') : ''}`}>
               <AlertTriangle size={14} className={`mt-0.5 shrink-0 ${!a.acknowledged ? 'text-orange-500' : dark ? 'text-gray-600' : 'text-gray-300'}`} />
               <div className="flex-1">
-                <div className={`text-sm ${!a.acknowledged ? (dark ? 'text-orange-300' : 'text-orange-800') : (dark ? 'text-gray-500' : 'text-gray-500')}`}>
+                <div className={`text-sm flex items-center gap-2 flex-wrap ${!a.acknowledged ? (dark ? 'text-orange-300' : 'text-orange-800') : (dark ? 'text-gray-500' : 'text-gray-500')}`}>
                   {a.message}
+                  {a.is_predicted && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold shrink-0">✨ Predicted</span>
+                  )}
                 </div>
                 <div className={`text-xs mt-0.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
                   {new Date(a.triggered_at).toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}

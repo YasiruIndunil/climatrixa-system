@@ -20,6 +20,7 @@ import PublicAlerts from './pages/public/PublicAlerts'
 import SensorDetail from './pages/public/SensorDetail'
 import Profile from './pages/public/Profile'
 import PublicExport from './pages/public/PublicExport'
+import AIPredictions from './pages/admin/AIPredictions'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } }
@@ -42,11 +43,12 @@ export default function App() {
                     <ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>
                   }>
                     <Route index element={<Overview />} />
+                    <Route path="ai-predictions" element={<AIPredictions />} />
                     <Route path="sensors" element={<Sensors />} />
+                    <Route path="map" element={<AdminSensorMap />} />                    
                     <Route path="users" element={<Users />} />
                     <Route path="alerts" element={<Alerts />} />
                     <Route path="export" element={<Export />} />
-                    <Route path="map" element={<AdminSensorMap />} />
                   </Route>
 
                   {/* Public user routes */}

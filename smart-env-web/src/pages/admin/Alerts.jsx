@@ -289,7 +289,7 @@ function RuleModal({ onClose }) {
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input type="checkbox" checked={form.trigger_on_predicted}
                   onChange={e => setForm({...form, trigger_on_predicted: e.target.checked})}
-                  className="w-4 h-4 rounded accent-indigo-500"/>
+                  className="w-4 h-4 rounded accent-amber-500"/>
                 <div>
                   <span className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>AI forecast (early warning)</span>
                   <p className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Alert in advance if the 24h forecast predicts a breach</p>
@@ -352,7 +352,7 @@ function AlertEventCard({ event, sensors, onAcknowledge }) {
               <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">NEW</span>
             )}
             {event.is_predicted && (
-              <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+              <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
                 ✨ Predicted {event.predicted_hours_ahead ? `+${event.predicted_hours_ahead}h` : ''}
               </span>
             )}

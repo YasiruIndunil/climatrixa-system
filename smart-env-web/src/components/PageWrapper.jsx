@@ -1,5 +1,32 @@
 import { useState } from "react"
 import { useTheme } from '../context/ThemeContext'
+import { Loader2 } from 'lucide-react'
+
+/**
+ * Consistent animated loading state for use across all pages.
+ * Usage: <LoadingSpinner label="Loading sensors..." />
+ */
+export function LoadingSpinner({ label = 'Loading...', size = 'md', fullHeight = false }) {
+  const { dark } = useTheme()
+  const iconSize = size === 'sm' ? 16 : size === 'lg' ? 32 : 22
+  return (
+    <div className={`flex flex-col items-center justify-center gap-3 ${fullHeight ? 'min-h-[240px]' : 'py-10'}`}>
+      <div className={`relative flex items-center justify-center`}>
+        <Loader2 size={iconSize} className={`animate-spin ${dark ? 'text-teal-400' : 'text-teal-500'}`}/>
+      </div>
+      {label && (
+        <p className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{label}</p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Compact inline spinner for buttons or small areas.
+ */
+export function InlineSpinner({ size = 14, className = '' }) {
+  return <Loader2 size={size} className={`animate-spin ${className}`}/>
+}
 
 export default function PageWrapper({ children, className = '' }) {
   const { dark } = useTheme()
