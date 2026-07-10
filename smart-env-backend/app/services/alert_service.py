@@ -18,7 +18,7 @@ ALERT_FIELD_MAP = {
 }
 
 UNIT_MAP = {
-    "temperature": "°C",
+    "temperature": "\u00b0C",
     "humidity": "%",
     "aqi": " AQI",
 }

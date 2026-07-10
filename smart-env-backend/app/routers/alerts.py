@@ -88,20 +88,29 @@ async def export_alert_events(
     format: str = "csv",
     admin: dict = Depends(require_admin)
 ):
-    query = db.table("alert_events").select("*")
-    if sensor_id:
-        query = query.eq("sensor_id", sensor_id)
-    if from_:
-        query = query.gte("triggered_at", _slst_to_utc(from_, end_of_day=False))
-    if to:
-        query = query.lte("triggered_at", _slst_to_utc(to, end_of_day=True))
+    def build_query():
+        """Build a fresh query with filters — must rebuild each page since
+        the Supabase client can't safely reuse a builder after execute()."""
+        q = db.table("alert_events").select("*")
+        if sensor_id:
+            q = q.eq("sensor_id", sensor_id)
+        if from_:
+            q = q.gte("triggered_at", _slst_to_utc(from_, end_of_day=False))
+        if to:
+            q = q.lte("triggered_at", _slst_to_utc(to, end_of_day=True))
+        return q
 
     # Paginate to fetch all records beyond Supabase's 1000 default limit
     all_rows = []
     page = 0
     page_size = 1000
     while True:
-        result = query.order("triggered_at", desc=True).range(page * page_size, (page + 1) * page_size - 1).execute()
+        result = (
+            build_query()
+            .order("triggered_at", desc=True)
+            .range(page * page_size, (page + 1) * page_size - 1)
+            .execute()
+        )
         if not result.data:
             break
         all_rows.extend(result.data)
@@ -166,5 +175,6 @@ async def export_alert_events(
     for r in rows:
         writer.writerow(row_data(r))
     output.seek(0)
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+    csv_bytes = "\ufeff" + output.getvalue()
+    return StreamingResponse(iter([csv_bytes]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": "attachment; filename=alert_events.csv"})

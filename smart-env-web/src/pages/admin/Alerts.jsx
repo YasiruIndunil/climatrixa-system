@@ -25,135 +25,6 @@ function getAlertIcon(type) {
   return '⚠️'
 }
 
-// ── Emergency Popup ───────────────────────────────────────────────
-function EmergencyPopup({ event, sensors, onDismiss, onAcknowledge }) {
-  const [countdown, setCountdown] = useState(30)
-  const sensor = sensors?.find(s => s.id === event.sensor_id)
-  const sensorName = sensor?.name || 'Unknown sensor'
-  const sensorLocation = sensor?.location || ''
-
-  const localTime = new Date(event.triggered_at).toLocaleString('en-LK', {
-    timeZone: 'Asia/Colombo',
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: true
-  })
-
-  const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
-  const borderColor = isHigh ? 'border-red-400' : 'border-orange-400'
-  const barColor = isHigh ? 'bg-red-500' : 'bg-orange-500'
-  const bgColor = isHigh ? 'bg-red-50' : 'bg-orange-50'
-  const iconBg = isHigh ? 'bg-red-100' : 'bg-orange-100'
-  const labelColor = isHigh ? 'text-red-500' : 'text-orange-500'
-  const titleColor = isHigh ? 'text-red-900' : 'text-orange-900'
-  const valueColor = isHigh ? 'text-red-600' : 'text-orange-600'
-  const timeColor = isHigh ? 'text-red-400' : 'text-orange-400'
-  const ackBtnColor = isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
-  const dismissBtnColor = isHigh ? 'border-red-200 text-red-600 hover:bg-red-100' : 'border-orange-200 text-orange-600 hover:bg-orange-100'
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) { clearInterval(timer); onDismiss(); return 0 }
-        return c - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onDismiss} />
-      <div className={`relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border-2 ${borderColor}`}>
-        <div className={`h-2 w-full ${barColor} animate-pulse`} />
-        <div className={`${bgColor} px-6 py-5`}>
-
-          {/* Header */}
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center animate-bounce text-2xl`}>
-                {getAlertIcon(event.alert_type)}
-              </div>
-              <div>
-                <div className={`text-xs font-bold uppercase tracking-widest ${labelColor} mb-0.5`}>
-                  🚨 Emergency Alert
-                </div>
-                <div className={`text-lg font-bold ${titleColor}`}>
-                  {TYPE_LABELS[event.alert_type] || event.alert_type}
-                </div>
-              </div>
-            </div>
-            <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-black/10 text-gray-500">
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* Sensor info */}
-          <div className={`flex items-center gap-2 text-sm font-semibold ${titleColor} mb-3`}>
-            <MapPin size={14} className={labelColor} />
-            {sensorName}
-            {sensorLocation && <span className={`font-normal text-xs ${timeColor}`}>— {sensorLocation}</span>}
-          </div>
-
-          {/* Message + values */}
-          <div className="bg-white rounded-xl p-4 mb-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">{event.message}</p>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${valueColor}`}>{event.actual_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">Actual</div>
-              </div>
-              <div className="text-2xl text-gray-300">→</div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-400">{event.threshold_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">Limit</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Time + map */}
-          <div className="flex items-center justify-between mb-4">
-            <div className={`flex items-center gap-1.5 text-xs ${timeColor}`}>
-              <Clock size={12} /> {localTime}
-            </div>
-            {sensor?.latitude && sensor?.longitude && (
-              <a
-                href={"https://www.google.com/maps?q=" + sensor.latitude + "," + sensor.longitude}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 bg-white/70 px-2 py-1 rounded-lg"
-              >
-                <MapPin size={11} /> View on map
-              </a>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button onClick={onDismiss}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${dismissBtnColor}`}>
-              Dismiss
-            </button>
-            <button onClick={() => { onAcknowledge(event.id); onDismiss() }}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${ackBtnColor} text-white flex items-center justify-center gap-2`}>
-              <CheckCheck size={15} /> Acknowledge
-            </button>
-          </div>
-
-          {/* Countdown */}
-          <div className="mt-3 text-center">
-            <div className={`text-xs ${timeColor}`}>Auto-dismissing in {countdown}s</div>
-            <div className="w-full bg-black/10 rounded-full h-1 mt-1">
-              <div className={`h-1 rounded-full ${barColor} transition-all duration-1000`}
-                style={{ width: (countdown / 30 * 100) + '%' }} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Tooltip ───────────────────────────────────────────────────────
 function Tooltip({ text, children }) {
   const [show, setShow] = useState(false)
@@ -435,8 +306,6 @@ export default function Alerts() {
   const [ruleTypeFilter, setRuleTypeFilter] = useState('all')
   const [eventSearch, setEventSearch] = useState('')
   const [showAcknowledged, setShowAcknowledged] = useState(false)
-  const [emergencyEvent, setEmergencyEvent] = useState(null)
-  const [seenEventIds, setSeenEventIds] = useState(new Set())
 
   const { data: sensors } = useQuery({
     queryKey: ['sensors-all'],
@@ -453,15 +322,6 @@ export default function Alerts() {
     queryFn: () => api.get('/alerts/events').then(r => r.data),
     refetchInterval: 15000,
   })
-
-  useEffect(() => {
-    if (!events) return
-    const newUnread = events.find(e => !e.acknowledged && !seenEventIds.has(e.id))
-    if (newUnread && !emergencyEvent) {
-      setEmergencyEvent(newUnread)
-      setSeenEventIds(prev => new Set([...prev, newUnread.id]))
-    }
-  }, [events])
 
   const deleteRule = async id => {
     if (!confirm('Delete this alert rule?')) return
@@ -516,15 +376,6 @@ export default function Alerts() {
 
   return (
     <div className={`min-h-full p-6 ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
-
-      {emergencyEvent && (
-        <EmergencyPopup
-          event={emergencyEvent}
-          sensors={sensors}
-          onDismiss={() => setEmergencyEvent(null)}
-          onAcknowledge={acknowledgeAlert}
-        />
-      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
