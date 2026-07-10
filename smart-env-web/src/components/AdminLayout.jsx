@@ -37,10 +37,18 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
     if (countdown === 0) onDismiss()
   }, [countdown])
 
+  const isPredicted = event.is_predicted
   const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
-  const borderColor = isHigh ? 'border-red-400' : 'border-orange-400'
-  const barColor = isHigh ? 'bg-red-500' : 'bg-orange-500'
-  const ackColor = isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+  // Predicted (AI early warning) = amber theme. Actual (real reading breach) = red/orange theme.
+  const borderColor = isPredicted ? 'border-amber-400' : isHigh ? 'border-red-400' : 'border-orange-400'
+  const barColor = isPredicted ? 'bg-amber-500' : isHigh ? 'bg-red-500' : 'bg-orange-500'
+  const ackColor = isPredicted ? 'bg-amber-600 hover:bg-amber-700' : isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+  const iconBg = isPredicted ? 'bg-amber-100' : isHigh ? 'bg-red-100' : 'bg-orange-100'
+  const labelColor = isPredicted ? 'text-amber-500' : isHigh ? 'text-red-500' : 'text-orange-500'
+  const titleColor = isPredicted ? 'text-amber-900' : isHigh ? 'text-red-900' : 'text-orange-900'
+  const valueColor = isPredicted ? 'text-amber-600' : isHigh ? 'text-red-600' : 'text-orange-600'
+  const dismissBorder = isPredicted ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : isHigh ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-orange-200 text-orange-600 hover:bg-orange-50'
+  const countdownColor = isPredicted ? 'text-amber-400' : isHigh ? 'text-red-400' : 'text-orange-400'
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
@@ -50,14 +58,19 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
         <div className="px-6 py-5">
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl ${isHigh ? 'bg-red-100' : 'bg-orange-100'} flex items-center justify-center animate-bounce text-2xl`}>
-                {event.alert_type?.includes('temperature') ? '🌡️' : event.alert_type?.includes('humidity') ? '💧' : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'}
+              <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center animate-bounce text-2xl`}>
+                {isPredicted ? '✨' : event.alert_type?.includes('temperature') ? '🌡️' : event.alert_type?.includes('humidity') ? '💧' : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'}
               </div>
               <div>
-                <div className={`text-xs font-bold uppercase tracking-widest ${isHigh ? 'text-red-500' : 'text-orange-500'} mb-0.5`}>🚨 Emergency Alert</div>
-                <div className={`text-lg font-bold ${isHigh ? 'text-red-900' : 'text-orange-900'}`}>
+                <div className={`text-xs font-bold uppercase tracking-widest ${labelColor} mb-0.5`}>
+                  {isPredicted ? '✨ AI Predicted Warning' : '🚨 Emergency Alert'}
+                </div>
+                <div className={`text-lg font-bold ${titleColor}`}>
                   {event.alert_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                 </div>
+                {isPredicted && event.predicted_hours_ahead && (
+                  <div className="text-xs font-medium text-amber-600 mt-0.5">Expected in ~{event.predicted_hours_ahead}h — not yet happened</div>
+                )}
               </div>
             </div>
             <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -67,8 +80,8 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
             <p className="text-sm text-gray-700 mb-3">{event.message}</p>
             <div className="flex items-center gap-4">
               <div className="text-center">
-                <div className={`text-2xl font-bold ${isHigh ? 'text-red-600' : 'text-orange-600'}`}>{event.actual_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">Actual</div>
+                <div className={`text-2xl font-bold ${valueColor}`}>{event.actual_value?.toFixed(1)}</div>
+                <div className="text-xs text-gray-400">{isPredicted ? 'Predicted' : 'Actual'}</div>
               </div>
               <div className="text-2xl text-gray-300">→</div>
               <div className="text-center">
@@ -80,7 +93,7 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
 
           <div className="flex gap-3">
             <button onClick={onDismiss}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${isHigh ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-orange-200 text-orange-600 hover:bg-orange-50'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${dismissBorder}`}>
               Dismiss
             </button>
             <button onClick={() => { onAcknowledge(event.id); onDismiss() }}
@@ -90,7 +103,7 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
           </div>
 
           <div className="mt-3 text-center">
-            <div className={`text-xs ${isHigh ? 'text-red-400' : 'text-orange-400'}`}>Auto-dismissing in {countdown}s</div>
+            <div className={`text-xs ${countdownColor}`}>Auto-dismissing in {countdown}s</div>
             <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
               <div className={`h-1 rounded-full ${barColor} transition-all duration-1000`}
                 style={{ width: (countdown / 30 * 100) + '%' }} />

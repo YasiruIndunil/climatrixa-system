@@ -21,17 +21,21 @@ const navItems = [
 
 function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
   const [countdown, setCountdown] = useState(30)
+  const isPredicted = event.is_predicted
   const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
-  const borderColor  = isHigh ? 'border-red-400'   : 'border-orange-400'
-  const barColor     = isHigh ? 'bg-red-500'        : 'bg-orange-500'
-  const bgColor      = isHigh ? 'bg-red-50'         : 'bg-orange-50'
-  const labelColor   = isHigh ? 'text-red-500'      : 'text-orange-500'
-  const titleColor   = isHigh ? 'text-red-900'      : 'text-orange-900'
-  const valueColor   = isHigh ? 'text-red-600'      : 'text-orange-600'
-  const timeColor    = isHigh ? 'text-red-400'      : 'text-orange-400'
-  const ackColor     = isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
-  const dismissColor = isHigh ? 'border-red-200 text-red-600 hover:bg-red-100' : 'border-orange-200 text-orange-600 hover:bg-orange-100'
-  const icon = event.alert_type?.includes('temperature') ? '🌡️'
+  // Predicted (AI early warning) = amber theme. Actual (real reading breach) = red/orange theme.
+  const borderColor  = isPredicted ? 'border-amber-400'  : isHigh ? 'border-red-400'   : 'border-orange-400'
+  const barColor     = isPredicted ? 'bg-amber-500'      : isHigh ? 'bg-red-500'        : 'bg-orange-500'
+  const bgColor      = isPredicted ? 'bg-amber-50'       : isHigh ? 'bg-red-50'         : 'bg-orange-50'
+  const labelColor   = isPredicted ? 'text-amber-500'    : isHigh ? 'text-red-500'      : 'text-orange-500'
+  const titleColor   = isPredicted ? 'text-amber-900'    : isHigh ? 'text-red-900'      : 'text-orange-900'
+  const valueColor   = isPredicted ? 'text-amber-600'    : isHigh ? 'text-red-600'      : 'text-orange-600'
+  const timeColor    = isPredicted ? 'text-amber-400'    : isHigh ? 'text-red-400'      : 'text-orange-400'
+  const ackColor     = isPredicted ? 'bg-amber-600 hover:bg-amber-700' : isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+  const dismissColor = isPredicted ? 'border-amber-200 text-amber-600 hover:bg-amber-100' : isHigh ? 'border-red-200 text-red-600 hover:bg-red-100' : 'border-orange-200 text-orange-600 hover:bg-orange-100'
+  const iconBg       = isPredicted ? 'bg-amber-100' : isHigh ? 'bg-red-100' : 'bg-orange-100'
+  const icon = isPredicted ? '✨'
+    : event.alert_type?.includes('temperature') ? '🌡️'
     : event.alert_type?.includes('humidity') ? '💧'
     : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'
 
@@ -52,10 +56,15 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
         <div className={`${bgColor} px-6 py-5`}>
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-xl ${isHigh ? 'bg-red-100' : 'bg-orange-100'} flex items-center justify-center animate-bounce text-2xl`}>{icon}</div>
+              <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center animate-bounce text-2xl`}>{icon}</div>
               <div>
-                <div className={`text-xs font-bold uppercase tracking-widest ${labelColor} mb-0.5`}>🚨 Alert</div>
+                <div className={`text-xs font-bold uppercase tracking-widest ${labelColor} mb-0.5`}>
+                  {isPredicted ? '✨ AI Predicted Warning' : '🚨 Alert'}
+                </div>
                 <div className={`text-lg font-bold ${titleColor}`}>{event.alert_type?.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+                {isPredicted && event.predicted_hours_ahead && (
+                  <div className="text-xs font-medium text-amber-600 mt-0.5">Expected in ~{event.predicted_hours_ahead}h — not yet happened</div>
+                )}
               </div>
             </div>
             <button onClick={onDismiss} className="p-1.5 rounded-lg hover:bg-black/10 text-gray-500"><X size={16}/></button>
@@ -65,7 +74,7 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
             <div className="flex items-center gap-4">
               <div className="text-center">
                 <div className={`text-2xl font-bold ${valueColor}`}>{event.actual_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">Actual</div>
+                <div className="text-xs text-gray-400">{isPredicted ? 'Predicted' : 'Actual'}</div>
               </div>
               <div className="text-2xl text-gray-300">→</div>
               <div className="text-center">
