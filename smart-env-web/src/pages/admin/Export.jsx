@@ -37,7 +37,8 @@ export default function Export() {
       if (readings.date_from) params.append('from', readings.date_from)
       if (readings.date_to)   params.append('to', readings.date_to)
       params.append('format', readings.format)
-      const res = await api.get(`/readings/export?${params}`, { responseType: 'blob' })
+      params.append('_ts', Date.now()) // cache-bust — ensures fresh data on every export, not a stale browser-cached response
+      const res = await api.get(`/readings/export?${params}`, { responseType: 'blob', headers: { 'Cache-Control': 'no-cache' } })
       const ext = readings.format === 'pdf' ? 'pdf' : 'csv'
       downloadBlob(res.data, `readings_${new Date().toISOString().slice(0,10)}.${ext}`)
       toast('Readings exported successfully')
@@ -54,7 +55,8 @@ export default function Export() {
       if (alerts.date_from) params.append('from', alerts.date_from)
       if (alerts.date_to)   params.append('to', alerts.date_to)
       params.append('format', alerts.format)
-      const res = await api.get(`/alerts/events/export?${params}`, { responseType: 'blob' })
+      params.append('_ts', Date.now())
+      const res = await api.get(`/alerts/events/export?${params}`, { responseType: 'blob', headers: { 'Cache-Control': 'no-cache' } })
       const ext = alerts.format === 'pdf' ? 'pdf' : 'csv'
       downloadBlob(res.data, `alert_events_${new Date().toISOString().slice(0,10)}.${ext}`)
       toast('Alert events exported successfully')
