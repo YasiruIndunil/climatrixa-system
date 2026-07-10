@@ -177,7 +177,8 @@ function RuleModal({ onClose }) {
   const toast = useToast()
   const [form, setForm] = useState({
     sensor_id: '', alert_type: 'temperature_high',
-    threshold_value: '', notify_email: '', is_active: true
+    threshold_value: '', notify_email: '', is_active: true,
+    trigger_on_actual: true, trigger_on_predicted: false
   })
   const [saving, setSaving] = useState(false)
   const { data: sensors } = useQuery({
@@ -209,6 +210,8 @@ function RuleModal({ onClose }) {
         alert_type: form.alert_type,
         threshold_value: parseFloat(form.threshold_value),
         is_active: form.is_active,
+        trigger_on_actual: form.trigger_on_actual,
+        trigger_on_predicted: form.trigger_on_predicted,
         // Send null if empty — backend expects EmailStr or null, not empty string
         notify_email: form.notify_email.trim() || null,
       }
@@ -271,6 +274,29 @@ function RuleModal({ onClose }) {
             <input type="email" className={inputClass} placeholder="admin@example.com"
               value={form.notify_email} onChange={e => setForm({...form, notify_email: e.target.value})} />
           </div>
+          <div>
+            <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Trigger source</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.trigger_on_actual}
+                  onChange={e => setForm({...form, trigger_on_actual: e.target.checked})}
+                  className="w-4 h-4 rounded accent-teal-600"/>
+                <div>
+                  <span className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>Actual readings</span>
+                  <p className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Alert when a live sensor reading crosses the threshold</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.trigger_on_predicted}
+                  onChange={e => setForm({...form, trigger_on_predicted: e.target.checked})}
+                  className="w-4 h-4 rounded accent-indigo-500"/>
+                <div>
+                  <span className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>AI forecast (early warning)</span>
+                  <p className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Alert in advance if the 24h forecast predicts a breach</p>
+                </div>
+              </label>
+            </div>
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
               className={`flex-1 border rounded-xl py-2.5 text-sm font-medium ${dark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
@@ -324,6 +350,11 @@ function AlertEventCard({ event, sensors, onAcknowledge }) {
             </span>
             {isUnread && (
               <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold animate-pulse">NEW</span>
+            )}
+            {event.is_predicted && (
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                ✨ Predicted {event.predicted_hours_ahead ? `+${event.predicted_hours_ahead}h` : ''}
+              </span>
             )}
             {event.acknowledged && (
               <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">

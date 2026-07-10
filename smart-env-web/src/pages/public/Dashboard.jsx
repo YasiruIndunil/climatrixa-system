@@ -1,26 +1,49 @@
+import { useState } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { useAuth } from '../../context/useAuth'
 import { useTheme } from '../../context/ThemeContext'
 import { useAlertWS } from '../../components/Toast'
 import api from '../../utils/api'
-import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge } from 'lucide-react'
+import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge, TrendingUp, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
-function MetricCard({ label, value, unit, icon: Icon, color, dark }) {
+function MetricCard({ label, value, unit, icon: Icon, color, dark, predicted }) {
   const colors = {
     red:    dark ? 'bg-red-500/10 text-red-400 border-red-500/20'       : 'bg-red-50 text-red-600 border-red-100',
     blue:   dark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'     : 'bg-blue-50 text-blue-600 border-blue-100',
     teal:   dark ? 'bg-teal-500/10 text-teal-400 border-teal-500/20'     : 'bg-teal-50 text-teal-600 border-teal-100',
     purple: dark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20': 'bg-purple-50 text-purple-600 border-purple-100',
   }
+  const predictedText = {
+    red:    dark ? 'text-red-400'    : 'text-red-500',
+    blue:   dark ? 'text-blue-400'   : 'text-blue-500',
+    teal:   dark ? 'text-teal-400'   : 'text-teal-500',
+    purple: dark ? 'text-purple-400' : 'text-purple-500',
+  }
   return (
     <div className={`rounded-2xl p-5 border shadow-sm ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border mb-4 ${colors[color]}`}>
         <Icon size={18}/>
       </div>
-      <div className={`text-2xl font-bold mb-0.5 ${dark ? 'text-white' : 'text-gray-900'}`}>
-        {value != null ? `${value}${unit}` : '—'}
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div className={`text-2xl font-bold mb-0.5 ${dark ? 'text-white' : 'text-gray-900'}`}>
+            {value != null ? `${value}${unit}` : '—'}
+          </div>
+          <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{label}</div>
+        </div>
+        {predicted != null && (
+          <div className={`text-right shrink-0 pl-2.5 border-l border-dashed ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5 justify-end mb-0.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
+              <Sparkles size={9}/> AI forecast
+            </div>
+            <div className={`text-sm font-bold flex items-center gap-1 justify-end ${predictedText[color]}`}>
+              <TrendingUp size={11}/> {predicted}{unit}
+            </div>
+            <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'}`}>in 1 hour</div>
+          </div>
+        )}
       </div>
-      <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{label}</div>
     </div>
   )
 }
@@ -42,10 +65,13 @@ const PARAM_LABELS = [
   { key: 'pressure',    label: 'Pressure', icon: Gauge },
 ]
 
-function SensorReadingCard({ reading, subscription, dark }) {
+function SensorReadingCard({ reading, subscription, forecast, dark }) {
   // Which params have alerts on?
   const enabledParams = PARAM_LABELS.filter(p => subscription?.[p.key] === true)
   const anyEnabled = enabledParams.length > 0
+
+  // Next-hour prediction (hours_ahead: 1) from AI forecast
+  const nextHour = forecast?.forecast?.find(f => f.hours_ahead === 1)
 
   return (
     <div className={`rounded-2xl border shadow-sm overflow-hidden ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
@@ -63,10 +89,10 @@ function SensorReadingCard({ reading, subscription, dark }) {
       </div>
       <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Temperature', value: reading.temperature, unit: '°C', icon: ThermometerSun, color: 'red' },
-          { label: 'Humidity',    value: reading.humidity,    unit: '%',  icon: Droplets,       color: 'blue' },
-          { label: 'AQI',         value: reading.aqi,         unit: '',   icon: Wind,           color: 'teal' },
-          { label: 'Pressure',    value: reading.pressure,    unit: ' hPa', icon: Gauge,        color: 'purple' },
+          { label: 'Temperature', value: reading.temperature, unit: '°C', icon: ThermometerSun, color: 'red',    predicted: nextHour?.temperature },
+          { label: 'Humidity',    value: reading.humidity,    unit: '%',  icon: Droplets,       color: 'blue',   predicted: nextHour?.humidity },
+          { label: 'AQI',         value: reading.aqi,         unit: '',   icon: Wind,           color: 'teal',   predicted: nextHour?.aqi },
+          { label: 'Pressure',    value: reading.pressure,    unit: ' hPa', icon: Gauge,        color: 'purple', predicted: nextHour?.pressure },
         ].map(m => (
           <MetricCard key={m.label} {...m} dark={dark}/>
         ))}
@@ -95,6 +121,125 @@ function SensorReadingCard({ reading, subscription, dark }) {
           Last updated: {reading.recorded_at_display}
         </div>
       )}
+    </div>
+  )
+}
+
+const FORECAST_PARAMS = [
+  { key: 'temperature', label: 'Temp',     icon: ThermometerSun, unit: '°C',  stroke: '#f87171', fill: '#fee2e2' },
+  { key: 'humidity',    label: 'Humidity', icon: Droplets,       unit: '%',   stroke: '#60a5fa', fill: '#dbeafe' },
+  { key: 'aqi',         label: 'AQI',      icon: Wind,           unit: '',    stroke: '#2dd4bf', fill: '#ccfbf1' },
+  { key: 'pressure',    label: 'Pressure', icon: Gauge,          unit: 'hPa', stroke: '#c084fc', fill: '#f3e8ff' },
+]
+
+function ForecastChartCard({ sensorName, forecast, dark }) {
+  const [activeParam, setActiveParam] = useState('temperature')
+  const param = FORECAST_PARAMS.find(p => p.key === activeParam)
+
+  if (!forecast || !forecast.forecast?.length) {
+    return (
+      <div className={`rounded-2xl border shadow-sm p-6 flex flex-col items-center justify-center text-center min-h-[220px] ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+        <Sparkles size={22} className={`mb-2 ${dark ? 'text-gray-700' : 'text-gray-200'}`}/>
+        <p className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Forecast building for {sensorName}…</p>
+      </div>
+    )
+  }
+
+  const chartData = forecast.forecast.map(f => ({
+    hour: `+${f.hours_ahead}h`,
+    value: f[activeParam],
+  }))
+
+  const values = chartData.map(d => d.value).filter(v => v != null)
+  const peak = values.length ? Math.max(...values) : null
+  const low = values.length ? Math.min(...values) : null
+  const peakHour = chartData.find(d => d.value === peak)?.hour
+
+  // Compute sensible Y-axis domain per parameter (AQI/Pressure need wider padding)
+  const range = (peak != null && low != null) ? peak - low : 0
+  const pad = range > 0 ? Math.max(range * 0.15, activeParam === 'aqi' ? 5 : activeParam === 'pressure' ? 0.5 : 0.3) : (activeParam === 'aqi' ? 20 : activeParam === 'pressure' ? 2 : 1)
+  const yDomain = low != null && peak != null ? [Math.floor(low - pad), Math.ceil(peak + pad)] : ['auto', 'auto']
+  const tickFmt = activeParam === 'aqi' ? (v => Math.round(v)) : (v => Number(v.toFixed(1)))
+
+  return (
+    <div className={`rounded-2xl border shadow-sm overflow-hidden ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+      <div className={`px-5 py-4 border-b flex items-center justify-between ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${dark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
+            <TrendingUp size={15} className="text-indigo-500"/>
+          </div>
+          <div>
+            <div className={`font-semibold text-sm ${dark ? 'text-white' : 'text-gray-900'}`}>{sensorName}</div>
+            <div className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Next 24 hours</div>
+          </div>
+        </div>
+        {forecast.anomaly_detected && (
+          <span className="flex items-center gap-1 text-xs font-semibold text-orange-500 bg-orange-50 px-2 py-1 rounded-full">
+            <AlertTriangle size={11}/> Anomaly
+          </span>
+        )}
+      </div>
+
+      {/* Param tabs */}
+      <div className={`flex gap-1 px-4 pt-3`}>
+        {FORECAST_PARAMS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => setActiveParam(p.key)}
+            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+              activeParam === p.key
+                ? dark ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-900'
+                : dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <p.icon size={12}/> {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div className="px-2 pt-2">
+        <ResponsiveContainer width="100%" height={140}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`grad-${activeParam}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={param.stroke} stopOpacity={0.35}/>
+                <stop offset="95%" stopColor={param.stroke} stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={dark ? '#1f2937' : '#f1f5f9'} vertical={false}/>
+            <XAxis dataKey="hour" tick={{ fontSize: 10, fill: dark ? '#6b7280' : '#9ca3af' }} interval={3} axisLine={false} tickLine={false}/>
+            <YAxis
+              tick={{ fontSize: 10, fill: dark ? '#6b7280' : '#9ca3af' }}
+              axisLine={false}
+              tickLine={false}
+              width={44}
+              domain={yDomain}
+              tickFormatter={tickFmt}
+            />
+            <Tooltip
+              contentStyle={{
+                background: dark ? '#111827' : '#fff',
+                border: dark ? '1px solid #374151' : '1px solid #e5e7eb',
+                borderRadius: 10, fontSize: 12,
+              }}
+              labelStyle={{ color: dark ? '#9ca3af' : '#6b7280' }}
+              formatter={(v) => [`${v}${param.unit}`, param.label]}
+            />
+            <Area type="monotone" dataKey="value" stroke={param.stroke} strokeWidth={2.5} fill={`url(#grad-${activeParam})`}/>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Peak/low summary */}
+      <div className={`px-5 py-3 flex items-center justify-between text-xs border-t ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+        <span className={dark ? 'text-gray-500' : 'text-gray-400'}>
+          Peak <span className={`font-semibold ${dark ? 'text-gray-300' : 'text-gray-700'}`}>{peak}{param.unit}</span> at {peakHour}
+        </span>
+        <span className={dark ? 'text-gray-500' : 'text-gray-400'}>
+          Low <span className={`font-semibold ${dark ? 'text-gray-300' : 'text-gray-700'}`}>{low}{param.unit}</span>
+        </span>
+      </div>
     </div>
   )
 }
@@ -145,6 +290,23 @@ export default function Dashboard() {
   })
   const subscriptionMap = Object.fromEntries(
     subscriptionQueries.map(q => [q.data?.sensorId, q.data?.data]).filter(([k]) => k)
+  )
+
+  // Fetch AI forecast for each assigned sensor
+  const forecastQueries = useQueries({
+    queries: sensorIdList.map(sensorId => ({
+      queryKey: ['forecast', sensorId],
+      queryFn: () => api.get(`/ai/forecast/${sensorId}`).then(r => r.data),
+      enabled: !!sensorId,
+      retry: false,
+      staleTime: 5 * 60 * 1000, // 5 min — forecast doesn't need to refetch constantly
+    }))
+  })
+  const forecastMap = Object.fromEntries(
+    sensorIdList.map((id, i) => [id, forecastQueries[i]?.data])
+  )
+  const sensorNameMap = Object.fromEntries(
+    myReadings.map(r => [r.sensor_id, r.sensor_name])
   )
 
   const today = new Date().toLocaleDateString('en-LK', {
@@ -211,7 +373,30 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} subscription={subscriptionMap[r.sensor_id]} dark={dark}/>)}
+          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} subscription={subscriptionMap[r.sensor_id]} forecast={forecastMap[r.sensor_id]} dark={dark}/>)}
+        </div>
+      )}
+
+      {/* AI Forecast section */}
+      {myReadings.length > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center gap-2">
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${dark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
+              <Sparkles size={13} className="text-indigo-500"/>
+            </div>
+            <h2 className={`font-semibold text-sm ${dark ? 'text-white' : 'text-gray-800'}`}>AI Forecast — Next 24 hours</h2>
+            <span className={`text-xs ml-auto ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Powered by machine learning</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {sensorIdList.map(sensorId => (
+              <ForecastChartCard
+                key={sensorId}
+                sensorName={sensorNameMap[sensorId] || 'Sensor'}
+                forecast={forecastMap[sensorId]}
+                dark={dark}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
