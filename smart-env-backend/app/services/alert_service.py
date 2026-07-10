@@ -27,6 +27,8 @@ UNIT_MAP = {
 async def check_and_trigger_alerts(sensor_id: str, reading: dict):
     """
     Check a new reading against all alert rules for this sensor.
+    Only checks rules where trigger_on_actual=True (predictive alerts
+    are handled separately in predictive_alerts.py via the AI forecast).
     Logs an alert_event for every rule that is breached.
     """
     print(f"[Alert] Checking rules for sensor {sensor_id[:8]}...")
@@ -36,6 +38,7 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
         .select("*")
         .eq("sensor_id", sensor_id)
         .eq("is_active", True)
+        .eq("trigger_on_actual", True)
         .execute()
     )
 
@@ -79,7 +82,7 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
                 print(f"[Alert] Skipping — unacknowledged alert already exists")
                 continue
 
-            # Build message ← this was missing before, causing NameError
+            # Build message
             unit = UNIT_MAP.get(field, "")
             direction_word = "exceeded" if direction == "gt" else "dropped below"
             message = (

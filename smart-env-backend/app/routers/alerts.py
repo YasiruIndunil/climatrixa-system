@@ -47,10 +47,12 @@ async def create_alert_rule(body: AlertRuleCreate, admin: dict = Depends(require
     if not sensor.data:
         raise HTTPException(status_code=404, detail="Sensor not found")
     result = db.table("alert_rules").insert({
-        "sensor_id":       body.sensor_id,
-        "alert_type":      body.alert_type.value,
-        "threshold_value": body.threshold_value,
-        "notify_email":    body.notify_email,
+        "sensor_id":            body.sensor_id,
+        "alert_type":           body.alert_type.value,
+        "threshold_value":      body.threshold_value,
+        "notify_email":         body.notify_email,
+        "trigger_on_actual":    body.trigger_on_actual,
+        "trigger_on_predicted": body.trigger_on_predicted,
     }).execute()
     return result.data[0]
 

@@ -4,10 +4,14 @@ import traceback
 import numpy as np
 from app.models.schemas import PredictionResponse
 from app.services.ai_engine import generate_forecast, detect_anomaly, train_models
+from app.services.predictive_alerts import check_predicted_alerts
 from app.core.security import require_admin
 from app.core.database import db
 
 router = APIRouter(prefix="/ai", tags=["AI Predictions"])
+
+# In-memory forecast cache — keeps Dashboard and SensorDetail consistent for 5 min
+_forecast_cache: dict = {}
 
 
 @router.post("/train/{sensor_id}")
@@ -76,6 +80,14 @@ async def get_prediction(sensor_id: str, hours: int = 24):
     if not sensor.data:
         raise HTTPException(status_code=404, detail="Sensor not found")
 
+    # ── Cache: return the same forecast for 5 minutes so Dashboard and
+    #    SensorDetail show identical numbers instead of drifting per-call ──
+    cache_key = f"{sensor_id}:{hours}"
+    now = datetime.now(timezone.utc)
+    cached = _forecast_cache.get(cache_key)
+    if cached and (now - cached["cached_at"]).total_seconds() < 300:
+        return cached["response"]
+
     forecast = generate_forecast(sensor_id, hours_ahead=min(hours, 48))
     is_anomaly, anomaly_desc = detect_anomaly(sensor_id)
 
@@ -89,10 +101,39 @@ async def get_prediction(sensor_id: str, hours: int = 24):
     except Exception:
         pass
 
-    return PredictionResponse(
+    # ── Anomaly → create a real alert event so it shows up like any other alert ──
+    if is_anomaly:
+        try:
+            existing = (
+                db.table("alert_events")
+                .select("id")
+                .eq("sensor_id", sensor_id)
+                .eq("alert_type", "anomaly")
+                .eq("acknowledged", False)
+                .execute()
+            )
+            if not existing.data:
+                latest = db.table("readings").select("temperature").eq("sensor_id", sensor_id).order("recorded_at", desc=True).limit(1).execute()
+                actual = latest.data[0]["temperature"] if latest.data else 0
+                db.table("alert_events").insert({
+                    "sensor_id":       sensor_id,
+                    "alert_type":      "anomaly",
+                    "actual_value":    actual,
+                    "threshold_value": 0,
+                    "message":         anomaly_desc or "Unusual reading pattern detected",
+                }).execute()
+        except Exception as e:
+            print(f"[Anomaly Alert] Error creating alert: {e}")
+
+    # ── Predictive alerting — check forecast against rules with trigger_on_predicted ──
+    check_predicted_alerts(sensor_id, forecast)
+
+    response = PredictionResponse(
         sensor_id=sensor_id,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=now,
         forecast=forecast,
         anomaly_detected=is_anomaly,
         anomaly_description=anomaly_desc,
     )
+    _forecast_cache[cache_key] = {"response": response, "cached_at": now}
+    return response

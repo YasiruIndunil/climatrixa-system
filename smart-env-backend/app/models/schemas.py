@@ -165,6 +165,8 @@ class AlertRuleCreate(BaseModel):
     alert_type: AlertType
     threshold_value: float = Field(example=35.0)
     notify_email: Optional[EmailStr] = None
+    trigger_on_actual: bool = True
+    trigger_on_predicted: bool = False
 
 
 class AlertRuleResponse(BaseModel):
@@ -174,6 +176,8 @@ class AlertRuleResponse(BaseModel):
     threshold_value: float
     notify_email: Optional[str]
     is_active: bool
+    trigger_on_actual: bool = True
+    trigger_on_predicted: bool = False
     created_at: datetime
 
 
@@ -188,6 +192,8 @@ class AlertEventResponse(BaseModel):
     acknowledged: bool = False
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[str] = None
+    is_predicted: bool = False
+    predicted_hours_ahead: Optional[int] = None
 
 
 # ── User sensor access schemas ─────────────────────────────────────────────────
