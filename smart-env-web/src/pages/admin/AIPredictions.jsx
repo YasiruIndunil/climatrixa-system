@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import {
   BrainCircuit, CheckCircle, RefreshCw, ThermometerSun, Droplets, Wind, Gauge,
-  AlertTriangle, Sparkles, Calendar, XCircle, TrendingUp
+  AlertTriangle, Sparkles, TrendingUp
 } from 'lucide-react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { useTheme } from '../../context/ThemeContext'
@@ -166,12 +166,6 @@ export default function AIPredictions() {
     }))
   })
 
-  const { data: scheduleLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
-    queryKey: ['schedule-logs-full'],
-    queryFn: () => api.get('/ai/schedule/logs?limit=15').then(r => r.data),
-    refetchInterval: 60000,
-  })
-
   const forecastMap = Object.fromEntries(activeSensors.map((s, i) => [s.id, forecastQueries[i]?.data]))
   const trainedMap = Object.fromEntries(activeSensors.map((s, i) => [s.id, statusQueries[i]?.data?.is_trained]))
 
@@ -189,7 +183,6 @@ export default function AIPredictions() {
             clearInterval(poll)
             setTrainingIds(prev => { const n = new Set(prev); n.delete(sensor.id); return n })
             toast(`AI model trained for ${sensor.name}`)
-            refetchLogs()
           }
         } catch {}
         if (attempts >= 12) clearInterval(poll)
@@ -225,44 +218,6 @@ export default function AIPredictions() {
           ))}
         </div>
       )}
-
-      {/* Schedule logs */}
-      <Card  className="hidden">
-        <CardHeader>
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${dark ? 'bg-purple-500/10' : 'bg-purple-50'}`}>
-            <Calendar size={16} className="text-purple-500"/>
-          </div>
-          <div>
-            <h2 className={`font-semibold text-sm ${dark ? 'text-white' : 'text-gray-800'}`}>Retraining schedule logs</h2>
-            <p className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Weekly Mon 2AM · Monthly 1st 3AM (Sri Lanka time)</p>
-          </div>
-        </CardHeader>
-        {logsLoading ? (
-          <LoadingSpinner label="Loading logs..."/>
-        ) : (
-          <div className={`divide-y ${dark ? 'divide-gray-800' : 'divide-gray-50'}`}>
-            {scheduleLogs?.length > 0 ? scheduleLogs.map((log, i) => (
-              <div key={i} className="px-5 py-3 flex items-center gap-3">
-                {log.status === 'success'
-                  ? <CheckCircle size={15} className="text-teal-500 shrink-0"/>
-                  : <XCircle size={15} className="text-red-500 shrink-0"/>}
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>
-                    {log.sensor_name || 'All sensors'}
-                    {log.readings_used ? <span className={`ml-2 text-xs font-normal ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{log.readings_used} readings used</span> : null}
-                  </div>
-                  <div className={`text-xs truncate ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{log.message}</div>
-                </div>
-                <div className={`text-xs shrink-0 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
-                  {log.created_at ? new Date(log.created_at).toLocaleString('en-LK', { timeZone: 'Asia/Colombo' }) : ''}
-                </div>
-              </div>
-            )) : (
-              <div className={`px-5 py-8 text-center text-sm ${dark ? 'text-gray-600' : 'text-gray-300'}`}>No retraining jobs run yet</div>
-            )}
-          </div>
-        )}
-      </Card>
     </PageWrapper>
   )
 }
