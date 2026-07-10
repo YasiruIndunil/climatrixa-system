@@ -216,8 +216,19 @@ export default function AdminSensorMap() {
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {(allSensors || []).map(sensor => {
           const r = readingMap[sensor.id]
+          const alertStatus = sensorAlertMap[sensor.id]
           return (
-            <div key={sensor.id} className={`${card} p-4`}>
+            <div key={sensor.id} className={`${card} p-4 relative`}>
+              {alertStatus?.actual && (
+                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shadow-lg animate-pulse" title="Active alert">
+                  <span className="text-white text-xs">⚠</span>
+                </div>
+              )}
+              {!alertStatus?.actual && alertStatus?.predicted && (
+                <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center shadow-lg" title="AI predicted warning">
+                  <span className="text-white text-xs">✨</span>
+                </div>
+              )}
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <div className={`font-semibold text-sm ${head}`}>{sensor.name}</div>
@@ -234,6 +245,16 @@ export default function AdminSensorMap() {
                   {sensor.is_active ? '● Active' : '○ Inactive'}
                 </span>
               </div>
+              {alertStatus?.actual && (
+                <div className="mb-2 px-2 py-1 rounded-lg bg-red-50 text-xs text-red-700 font-medium truncate">
+                  ⚠ {alertStatus.actual.message}
+                </div>
+              )}
+              {alertStatus?.predicted && (
+                <div className="mb-2 px-2 py-1 rounded-lg bg-amber-50 text-xs text-amber-700 font-medium truncate">
+                  ✨ {alertStatus.predicted.message}
+                </div>
+              )}
               {r ? (
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>🌡️ {r.temperature}°C</span>

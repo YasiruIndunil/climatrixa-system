@@ -212,11 +212,13 @@ export default function Sensors() {
 
   const toggleSensor = async sensor => {
     try {
-      await api.patch(`/sensors/${sensor.id}`, { is_active: !sensor.is_active })
+      const newStatus = !sensor.is_active
+      await api.patch(`/sensors/${sensor.id}`, { is_active: newStatus })
       queryClient.invalidateQueries(['sensors'])
-      toast(sensor.is_active ? 'Sensor deactivated' : 'Sensor activated')
-    } catch {
-      toast('Failed to update sensor', 'error')
+      toast(newStatus ? 'Sensor activated' : 'Sensor deactivated')
+    } catch (err) {
+      const detail = err?.response?.data?.detail
+      toast(detail ? `Failed to update sensor: ${detail}` : 'Failed to update sensor', 'error')
     }
   }
 

@@ -41,20 +41,36 @@ function AQIBadge({ status }) {
 
 function MetricPill({ label, value, unit, color, dark, predicted }) {
   const colors = {
-    red: dark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600',
-    blue: dark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600',
-    teal: dark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-600',
-    purple: dark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600',
+    red: dark ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100',
+    blue: dark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100',
+    teal: dark ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-teal-50 text-teal-600 border-teal-100',
+    purple: dark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-600 border-purple-100',
+  }
+  const predictedText = {
+    red: dark ? 'text-red-400' : 'text-red-500',
+    blue: dark ? 'text-blue-400' : 'text-blue-500',
+    teal: dark ? 'text-teal-400' : 'text-teal-500',
+    purple: dark ? 'text-purple-400' : 'text-purple-500',
   }
   return (
-    <div className={`rounded-xl px-3 py-2 text-center ${colors[color]}`}>
-      <div className="text-base font-bold">{value}{unit}</div>
-      <div className="text-xs opacity-70 mt-0.5">{label}</div>
-      {predicted != null && (
-        <div className="flex items-center justify-center gap-0.5 text-[10px] font-semibold mt-1 pt-1 border-t border-current/10">
-          <Sparkles size={8}/> {predicted}{unit} <span className="opacity-60 font-normal">in 1h</span>
+    <div className={`rounded-xl px-3 py-2.5 border ${colors[color]}`}>
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-base font-bold">{value}{unit}</div>
+          <div className="text-xs opacity-70 mt-0.5">{label}</div>
         </div>
-      )}
+        {predicted != null && (
+          <div className={`text-right shrink-0 pl-2 border-l border-dashed ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5 justify-end mb-0.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
+              <Sparkles size={8}/> AI
+            </div>
+            <div className={`text-xs font-bold flex items-center gap-0.5 justify-end ${predictedText[color]}`}>
+              <TrendingUp size={9}/> {predicted}{unit}
+            </div>
+            <div className={`text-[9px] ${dark ? 'text-gray-600' : 'text-gray-400'}`}>1h</div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
