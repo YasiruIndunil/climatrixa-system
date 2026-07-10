@@ -111,8 +111,8 @@ export default function SensorMap() {
   const card = `rounded-2xl border shadow-sm ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`
 
   return (
-    <div className={`p-6 ${dark ? 'text-white' : 'text-gray-900'}`}>
-      <div className="mb-4 flex items-start justify-between flex-wrap gap-3">
+    <div className={`p-3 sm:p-6 ${dark ? 'text-white' : 'text-gray-900'}`}>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className={`text-xl font-bold ${head}`}>Sensor Map</h1>
           <p className={`text-sm mt-0.5 ${sub}`}>
@@ -121,16 +121,16 @@ export default function SensorMap() {
           </p>
         </div>
         {/* Filter toggle */}
-        <div className={`flex rounded-xl overflow-hidden border text-xs font-medium ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className={`w-full sm:w-auto flex rounded-xl overflow-hidden border text-xs font-medium ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
           <button
             onClick={() => setShowOnlyMine(false)}
-            className={`px-3 py-1.5 transition-colors ${!showOnlyMine
+            className={`flex-1 sm:flex-none px-3 py-2 transition-colors text-center ${!showOnlyMine
               ? 'bg-blue-600 text-white'
               : dark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}
           >All Sensors</button>
           <button
             onClick={() => setShowOnlyMine(true)}
-            className={`px-3 py-1.5 transition-colors ${showOnlyMine
+            className={`flex-1 sm:flex-none px-3 py-2 transition-colors text-center ${showOnlyMine
               ? 'bg-blue-600 text-white'
               : dark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}
           >My Sensors</button>
@@ -138,18 +138,18 @@ export default function SensorMap() {
       </div>
 
       {/* Legend */}
-      <div className={`flex items-center gap-5 mb-4 text-xs ${sub} flex-wrap`}>
+      <div className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4 text-xs ${sub}`}>
         <span className="flex items-center gap-1.5">
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png"
-            className="h-4 w-auto" alt="mine"/> My assigned sensor (active)
+            className="h-4 shrink-0" alt="mine"/> My assigned sensor (active)
         </span>
         <span className="flex items-center gap-1.5">
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png"
-            className="h-4 w-auto" alt="active"/> Active sensor
+            className="h-4 shrink-0" alt="active"/> Active sensor
         </span>
         <span className="flex items-center gap-1.5">
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png"
-            className="h-4 w-auto" alt="inactive"/> Inactive sensor
+            className="h-4 shrink-0" alt="inactive"/> Inactive sensor
         </span>
         <span className="flex items-center gap-1.5">
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
@@ -162,7 +162,10 @@ export default function SensorMap() {
       </div>
 
       {/* Map */}
-      <div className={`rounded-2xl border overflow-hidden shadow-sm mb-6 ${dark ? 'border-gray-800' : 'border-gray-200'}`} style={{ height: 480 }}>
+      <div
+        className={`rounded-2xl border overflow-hidden shadow-sm mb-6 ${dark ? 'border-gray-800' : 'border-gray-200'}`}
+        style={{ height: 'clamp(320px, 60vh, 480px)' }}
+        >
         {sensorsLoading ? (
           <div className={`h-full flex items-center justify-center ${dark ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <LoadingSpinner label="Loading sensor map..."/>
@@ -173,7 +176,15 @@ export default function SensorMap() {
             <p className={`text-sm ${sub}`}>No sensors with GPS data yet</p>
           </div>
         ) : (
-          <MapContainer center={[7.2085, 79.8358]} zoom={10} style={{ height: '100%', width: '100%' }}>
+          <MapContainer
+              center={[7.2085,79.8358]}
+              zoom={10}
+              style={{
+              height:'100%',
+              width:'100%',
+              minHeight:'320px'
+              }}
+              >
             <TileLayer attribution='© OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
             <FitBounds sensors={sensors}/>
             {sensors.map(sensor => {
@@ -189,7 +200,7 @@ export default function SensorMap() {
 
               return (
                 <Marker key={sensor.id} position={[sensor.latitude, sensor.longitude]} icon={icon}>
-                  <Popup maxWidth={260}>
+                  <Popup maxWidth={window.innerWidth < 640 ? 220 : 260}>
                     <div className="p-1">
                       {alertStatus?.actual && (
                         <div className="mb-2 px-2 py-1.5 rounded-lg bg-red-50 border border-red-200">
@@ -203,9 +214,9 @@ export default function SensorMap() {
                           <div className="text-xs text-amber-600 mt-0.5">{alertStatus.predicted.message}</div>
                         </div>
                       )}
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                         <div className="font-bold text-sm text-gray-900">{sensor.name}</div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           {isMine && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">Mine</span>}
                           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${sensor.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                             {sensor.is_active ? 'Active' : 'Inactive'}
@@ -256,13 +267,13 @@ export default function SensorMap() {
 
       {/* Sensor list below map — ALL sensors */}
       <h2 className={`font-semibold text-sm mb-3 ${head}`}>All sensors</h2>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {(allSensors || []).map(sensor => {
           const r = readingMap[sensor.id]
           const isMine = assignedIds.has(sensor.id)
           return (
             <div key={sensor.id} className={`${card} p-4`}>
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-2">
                 <div>
                   <div className={`font-semibold text-sm ${head}`}>{sensor.name}</div>
                   <div className={`flex items-center gap-1 text-xs mt-0.5 ${sub}`}>
@@ -285,7 +296,7 @@ export default function SensorMap() {
                 </div>
               </div>
               {r ? (
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className={`min-h-[320px] h-full flex items-center justify-center`}>
                   <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>🌡️ {r.temperature}°C</span>
                   <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>💧 {r.humidity}%</span>
                   <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>🌫️ {r.aqi}</span>
