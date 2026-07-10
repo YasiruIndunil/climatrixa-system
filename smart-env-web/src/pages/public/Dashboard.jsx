@@ -21,32 +21,80 @@ function MetricCard({ label, value, unit, icon: Icon, color, dark, predicted }) 
     teal:   dark ? 'text-teal-400'   : 'text-teal-500',
     purple: dark ? 'text-purple-400' : 'text-purple-500',
   }
-  return (
-    <div className={`rounded-2xl p-5 border shadow-sm ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border mb-4 ${colors[color]}`}>
-        <Icon size={18}/>
-      </div>
-      <div className="flex items-end justify-between gap-2">
-        <div className="min-w-0">
-          <div className={`text-2xl font-bold mb-0.5 ${dark ? 'text-white' : 'text-gray-900'}`}>
-            {value != null ? `${value}${unit}` : '—'}
-          </div>
-          <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{label}</div>
+return (
+  <div
+    className={`rounded-xl p-3 border shadow-sm ${
+      dark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-100"
+    }`}
+  >
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+
+      {/* Icon + Label */}
+      <div className="flex items-center sm:flex-col sm:w-14 gap-3 sm:gap-1 shrink-0">
+        <div
+          className={`w-9 h-9 rounded-lg flex items-center justify-center border ${colors[color]}`}
+        >
+          <Icon size={16}/>
         </div>
-        {predicted != null && (
-          <div className={`text-right shrink-0 pl-2.5 border-l border-dashed ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className={`text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5 justify-end mb-0.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
-              <Sparkles size={9}/> AI forecast
-            </div>
-            <div className={`text-sm font-bold flex items-center gap-1 justify-end ${predictedText[color]}`}>
-              <TrendingUp size={11}/> {predicted}{unit}
-            </div>
-            <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'}`}>in 1 hour</div>
-          </div>
-        )}
+
+        <span
+          className={`text-xs font-medium ${
+            dark ? "text-gray-400" : "text-gray-500"
+          }`}
+        >
+          {label}
+        </span>
       </div>
+
+
+      {/* Value */}
+      <div className="flex-1 flex justify-center">
+        <div
+          className={`text-2xl sm:text-3xl font-bold ${
+            dark ? "text-white" : "text-gray-900"
+          }`}
+        >
+          {value != null ? `${value}${unit}` : "—"}
+        </div>
+      </div>
+
+
+      {/* Forecast */}
+      {predicted != null && (
+        <div
+          className={`text-center sm:text-right border-t sm:border-t-0 sm:border-l border-dashed pt-2 sm:pt-0 sm:pl-3 ${
+            dark ? "border-gray-700" : "border-gray-200"
+          }`}
+        >
+          <div
+            className={`text-[9px] font-bold uppercase flex items-center justify-center sm:justify-end gap-1 ${
+              dark ? "text-gray-600" : "text-gray-400"
+            }`}
+          >
+            <Sparkles size={8}/>
+            AI Forecast
+          </div>
+
+          <div
+            className={`text-xs font-bold flex justify-center sm:justify-end items-center gap-1 ${predictedText[color]}`}
+          >
+            <TrendingUp size={10}/>
+            {predicted}{unit}
+          </div>
+
+          <div
+            className={`text-[10px] ${
+              dark ? "text-gray-600" : "text-gray-400"
+            }`}
+          >
+            in 1 hour
+          </div>
+        </div>
+      )}
+
     </div>
-  )
+  </div>
+)
 }
 
 function AQIBadge({ status }) {
@@ -321,35 +369,109 @@ export default function Dashboard() {
         <p className={`text-sm mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{today}</p>
       </div>
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div className={`rounded-2xl p-5 border shadow-sm ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border mb-4 ${dark ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-teal-50 text-teal-600 border-teal-100'}`}>
-            <Radio size={18}/>
-          </div>
-          <div className={`text-2xl font-bold mb-0.5 ${dark ? 'text-white' : 'text-gray-900'}`}>{myReadings.length}</div>
-          <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>My sensors</div>
-        </div>
-        <div className={`rounded-2xl p-5 border shadow-sm ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border mb-4 ${dark ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>
-            <Bell size={18}/>
-          </div>
-          <div className={`text-2xl font-bold mb-0.5 ${dark ? 'text-white' : 'text-gray-900'}`}>{unreadCount}</div>
-          <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Unread alerts</div>
-        </div>
-        <div className={`rounded-2xl p-5 border shadow-sm col-span-2 lg:col-span-1 ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border mb-4 ${dark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
-            <Activity size={18}/>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`text-2xl font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
-              {connected ? 'Live' : 'Off'}
+{/* Summary stats */}
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+
+  {[
+    {
+      title:"Sensors",
+      value:myReadings.length,
+      icon:Radio,
+      color:"teal"
+    },
+    {
+      title:"Alerts",
+      value:unreadCount,
+      icon:Bell,
+      color:"orange"
+    },
+    {
+      title:"Status",
+      value:connected ? "Live" : "Off",
+      icon:Activity,
+      color:"purple",
+      status:true
+    }
+  ].map((item)=>{
+
+    const Icon=item.icon
+
+    return (
+      <div
+        key={item.title}
+        className={`rounded-xl p-3 border shadow-sm ${
+          dark
+          ? "bg-gray-900 border-gray-800"
+          : "bg-white border-gray-100"
+        }`}
+      >
+
+        <div className="flex items-center">
+
+          <div className="flex flex-col items-center w-14 shrink-0">
+
+            <div
+              className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
+                item.color==="teal"
+                ? dark
+                  ?"bg-teal-500/10 text-teal-400 border-teal-500/20"
+                  :"bg-teal-50 text-teal-600 border-teal-100"
+
+                : item.color==="orange"
+                ? dark
+                  ?"bg-orange-500/10 text-orange-400 border-orange-500/20"
+                  :"bg-orange-50 text-orange-600 border-orange-100"
+
+                : dark
+                  ?"bg-purple-500/10 text-purple-400 border-purple-500/20"
+                  :"bg-purple-50 text-purple-600 border-purple-100"
+              }`}
+            >
+              <Icon size={16}/>
             </div>
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-teal-400 animate-pulse' : 'bg-red-400'}`}/>
+
+
+            <span
+              className={`mt-1 text-[11px] ${
+                dark ? "text-gray-500":"text-gray-400"
+              }`}
+            >
+              {item.title}
+            </span>
+
           </div>
-          <div className={`text-sm ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Feed status</div>
+
+
+          <div className="flex-1 flex justify-center items-center gap-2">
+
+            <span
+              className={`text-2xl font-bold ${
+                dark ? "text-white":"text-gray-900"
+              }`}
+            >
+              {item.value}
+            </span>
+
+
+            {item.status && (
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  connected
+                  ?"bg-teal-400 animate-pulse"
+                  :"bg-red-400"
+                }`}
+              />
+            )}
+
+          </div>
+
         </div>
+
       </div>
+    )
+  })}
+
+</div>
 
       {/* Live readings */}
       <div className="mb-2 flex items-center gap-2">

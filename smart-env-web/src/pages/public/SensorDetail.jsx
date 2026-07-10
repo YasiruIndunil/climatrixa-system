@@ -227,20 +227,47 @@ export default function SensorDetail() {
               </div>
             )}
             {/* Next 6 hours summary cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {PARAMS.map(p => {
-                const next6 = forecast.forecast.slice(0, 6).map(f => f[p.key]).filter(v => v != null)
-                const avg = next6.length ? (next6.reduce((a, b) => a + b, 0) / next6.length).toFixed(1) : '-'
+                const next6 = forecast.forecast
+                  .slice(0, 6)
+                  .map(f => f[p.key])
+                  .filter(v => v != null)
+
+                const avg = next6.length
+                  ? (next6.reduce((a, b) => a + b, 0) / next6.length).toFixed(1)
+                  : '-'
+
                 const min = next6.length ? Math.min(...next6).toFixed(1) : '-'
                 const max = next6.length ? Math.max(...next6).toFixed(1) : '-'
+
                 return (
-                  <div key={p.key} className={`rounded-xl p-3 ${colors[p.color]}`}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <p.icon size={13}/>
-                      <span className="text-xs font-semibold">{p.label}</span>
+                  <div
+                    key={p.key}
+                    className={`rounded-xl p-3 ${colors[p.color]}`}
+                  >
+                    <div className="flex flex-col gap-2">
+
+                      {/* Header */}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p.icon size={14} className="shrink-0" />
+                        <span className="text-xs font-semibold truncate">
+                          {p.label}
+                        </span>
+                      </div>
+
+                      {/* Value */}
+                      <div className="text-2xl sm:text-2xl font-bold leading-none">
+                        {avg}
+                        <span className="text-lg sm:text-xl">{p.unit}</span>
+                      </div>
+
+                      {/* Range */}
+                      <div className="text-xs opacity-70">
+                        Next 6h avg · {min}–{max}{p.unit}
+                      </div>
+
                     </div>
-                    <div className="text-lg font-bold">{avg}{p.unit}</div>
-                    <div className="text-xs opacity-70">Next 6h avg · {min}–{max}{p.unit}</div>
                   </div>
                 )
               })}
