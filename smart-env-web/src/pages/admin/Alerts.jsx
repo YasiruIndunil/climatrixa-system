@@ -194,12 +194,17 @@ function RuleModal({ onClose }) {
     e.preventDefault()
     setSaving(true)
 
-    // Check for duplicate sensor + alert_type combination
+    // Check for duplicate sensor + alert_type + overlapping trigger source
+    // (Two rules for the same sensor/type are allowed if one is actual-only
+    //  and the other is predicted-only — e.g. actual@32°C + AI early-warning@29°C)
     const duplicate = existingRules?.find(r =>
-      r.sensor_id === form.sensor_id && r.alert_type === form.alert_type
+      r.sensor_id === form.sensor_id &&
+      r.alert_type === form.alert_type &&
+      ((r.trigger_on_actual && form.trigger_on_actual) || (r.trigger_on_predicted && form.trigger_on_predicted))
     )
     if (duplicate) {
-      toast(`A ${form.alert_type.replace(/_/g, ' ')} rule already exists for this sensor (threshold: ${duplicate.threshold_value}). Edit or delete the existing rule instead.`, 'error')
+      const overlapSource = (duplicate.trigger_on_actual && form.trigger_on_actual) ? 'actual reading' : 'AI prediction'
+      toast(`A ${form.alert_type.replace(/_/g, ' ')} rule already exists for this sensor on ${overlapSource} (threshold: ${duplicate.threshold_value}). Edit or delete it instead.`, 'error')
       setSaving(false)
       return
     }

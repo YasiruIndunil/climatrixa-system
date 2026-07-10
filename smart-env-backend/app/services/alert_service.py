@@ -69,13 +69,16 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
         print(f"[Alert] Rule: {alert_type} threshold={threshold} actual={actual} triggered={triggered}")
 
         if triggered:
-            # Only re-trigger if last alert was acknowledged
+            # Only re-trigger if last ACTUAL alert was acknowledged
+            # (is_predicted=False filter prevents an unacknowledged AI-predicted
+            #  alert from silently blocking a real actual-reading alert)
             recent_unacknowledged = (
                 db.table("alert_events")
                 .select("id")
                 .eq("sensor_id", sensor_id)
                 .eq("alert_type", alert_type)
                 .eq("acknowledged", False)
+                .eq("is_predicted", False)
                 .execute()
             )
             if recent_unacknowledged.data:
@@ -99,6 +102,7 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
                 "actual_value":    actual,
                 "threshold_value": threshold,
                 "message":         message,
+                "is_predicted":    False,
             }).execute()
 
             # Broadcast to all connected WebSocket clients
