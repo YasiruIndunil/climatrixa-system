@@ -156,7 +156,14 @@ export default function PublicLayout() {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
-  const sidebar = `flex flex-col border-r h-full ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`
+  const sidebar = `
+        flex flex-col border-r h-full
+        ${dark 
+        ? 'bg-gray-900 border-gray-800' 
+        : 'bg-white border-gray-100'}
+        relative
+        z-[10000]
+        `
 
   const NavContent = () => (
     <>
@@ -223,9 +230,9 @@ export default function PublicLayout() {
       <aside className={`w-60 hidden md:flex flex-col ${sidebar}`}><NavContent/></aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="fixed inset-0 z-[9999] md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)}/>
-          <aside className={`absolute left-0 top-0 bottom-0 w-64 flex flex-col ${sidebar}`}><NavContent/></aside>
+          <aside className={`absolute left-0 top-0 bottom-0 w-64 flex flex-col z-[10000] ${sidebar}`}><NavContent/></aside>
         </div>
       )}
 
