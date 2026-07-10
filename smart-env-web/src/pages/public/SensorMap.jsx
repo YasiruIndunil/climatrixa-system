@@ -7,6 +7,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
+import { LoadingSpinner } from '../../components/PageWrapper'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -30,6 +31,18 @@ const myAssignedIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
+})
+// Red = active alert triggered by a real reading (needs attention now)
+const alertIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [30, 49], iconAnchor: [15, 49], popupAnchor: [1, -40], shadowSize: [41, 41],
+})
+// Amber/gold = AI-predicted alert (early warning, not yet happened)
+const predictedIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [28, 46], iconAnchor: [14, 46], popupAnchor: [1, -38], shadowSize: [41, 41],
 })
 
 function FitBounds({ sensors }) {
@@ -63,7 +76,7 @@ export default function SensorMap() {
     enabled: !!user?.id,
   })
 
-  const { data: allSensors } = useQuery({
+  const { data: allSensors, isLoading: sensorsLoading } = useQuery({
     queryKey: ['sensors-map'],
     queryFn: () => api.get('/sensors/').then(r => r.data),
   })
@@ -74,10 +87,24 @@ export default function SensorMap() {
     refetchInterval: 30000,
   })
 
+  const { data: alerts } = useQuery({
+    queryKey: ['public-alert-events-map'],
+    queryFn: () => api.get('/alerts/events').then(r => r.data),
+    refetchInterval: 20000,
+  })
+
   const assignedIds = new Set(mySensors?.map(row => row.sensors?.id).filter(Boolean) || [])
   const allWithGPS = (allSensors || []).filter(s => s.latitude && s.longitude)
   const sensors = showOnlyMine ? allWithGPS.filter(s => assignedIds.has(s.id)) : allWithGPS
   const readingMap = Object.fromEntries((readings || []).map(r => [r.sensor_id, r]))
+
+  // Build per-sensor alert status: actual (real reading breach) takes priority over predicted (AI forecast)
+  const sensorAlertMap = {}
+  ;(alerts || []).filter(a => !a.acknowledged).forEach(a => {
+    if (!sensorAlertMap[a.sensor_id]) sensorAlertMap[a.sensor_id] = { actual: null, predicted: null }
+    if (a.is_predicted) sensorAlertMap[a.sensor_id].predicted = a
+    else sensorAlertMap[a.sensor_id].actual = a
+  })
 
   const sub  = dark ? 'text-gray-500' : 'text-gray-400'
   const head = dark ? 'text-white'    : 'text-gray-900'
@@ -124,11 +151,23 @@ export default function SensorMap() {
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png"
             className="h-4 w-auto" alt="inactive"/> Inactive sensor
         </span>
+        <span className="flex items-center gap-1.5">
+          <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
+            className="h-5 w-auto" alt="alert"/> Active alert (real reading)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png"
+            className="h-4.5 w-auto" alt="predicted"/> AI predicted warning
+        </span>
       </div>
 
       {/* Map */}
       <div className={`rounded-2xl border overflow-hidden shadow-sm mb-6 ${dark ? 'border-gray-800' : 'border-gray-200'}`} style={{ height: 480 }}>
-        {sensors.length === 0 ? (
+        {sensorsLoading ? (
+          <div className={`h-full flex items-center justify-center ${dark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+            <LoadingSpinner label="Loading sensor map..."/>
+          </div>
+        ) : sensors.length === 0 ? (
           <div className={`h-full flex flex-col items-center justify-center ${dark ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <MapPin size={36} className={`mb-3 ${dark ? 'text-gray-700' : 'text-gray-200'}`}/>
             <p className={`text-sm ${sub}`}>No sensors with GPS data yet</p>
@@ -140,8 +179,11 @@ export default function SensorMap() {
             {sensors.map(sensor => {
               const r = readingMap[sensor.id]
               const isMine = assignedIds.has(sensor.id)
-              // Blue = mine & active, green = active, grey = inactive
-              const icon = isMine && sensor.is_active ? myAssignedIcon
+              const alertStatus = sensorAlertMap[sensor.id]
+              // Priority: actual alert (red) > predicted alert (violet) > mine (blue) > active (green) > inactive (grey)
+              const icon = alertStatus?.actual ? alertIcon
+                : alertStatus?.predicted ? predictedIcon
+                : isMine && sensor.is_active ? myAssignedIcon
                 : sensor.is_active ? activeIcon
                 : inactiveIcon
 
@@ -149,6 +191,18 @@ export default function SensorMap() {
                 <Marker key={sensor.id} position={[sensor.latitude, sensor.longitude]} icon={icon}>
                   <Popup maxWidth={260}>
                     <div className="p-1">
+                      {alertStatus?.actual && (
+                        <div className="mb-2 px-2 py-1.5 rounded-lg bg-red-50 border border-red-200">
+                          <div className="text-xs font-bold text-red-700 flex items-center gap-1">⚠ Active Alert</div>
+                          <div className="text-xs text-red-600 mt-0.5">{alertStatus.actual.message}</div>
+                        </div>
+                      )}
+                      {alertStatus?.predicted && (
+                        <div className="mb-2 px-2 py-1.5 rounded-lg bg-amber-50 border border-amber-200">
+                          <div className="text-xs font-bold text-amber-700 flex items-center gap-1">✨ AI Predicted Warning</div>
+                          <div className="text-xs text-amber-600 mt-0.5">{alertStatus.predicted.message}</div>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between mb-2">
                         <div className="font-bold text-sm text-gray-900">{sensor.name}</div>
                         <div className="flex items-center gap-1">
