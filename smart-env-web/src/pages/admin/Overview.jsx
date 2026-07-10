@@ -126,7 +126,7 @@ export default function Overview() {
 
       {/* Live readings */}
       <div className={`rounded-2xl border mb-4 overflow-hidden ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'} shadow-sm`}>
-        <div className={`px-4 py-3 border-b flex items-center justify-between ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
+        <div className={`px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 bg-teal-400 rounded-full animate-pulse" />
             <h2 className={`font-semibold text-sm ${dark ? 'text-white' : 'text-gray-800'}`}>Live sensor readings</h2>
@@ -143,21 +143,21 @@ export default function Overview() {
             const nextHour = forecastMap[r.sensor_id]?.forecast?.find(f => f.hours_ahead === 1)
             return (
             <div key={r.sensor_id} className={`px-4 py-3 hover:${dark ? 'bg-gray-800/50' : 'bg-gray-50'} transition-colors`}>
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
                 <div>
                   <div className={`font-semibold text-sm ${dark ? 'text-white' : 'text-gray-900'}`}>{r.sensor_name}</div>
                   <div className={`text-xs mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{r.location}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <AQIBadge status={r.aqi_status} />
+                </div>  
+              </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <MetricPill label="Temp" value={r.temperature} unit="°C" color="red" dark={dark} predicted={nextHour?.temperature} />
+                  <MetricPill label="Humidity" value={r.humidity} unit="%" color="blue" dark={dark} predicted={nextHour?.humidity} />
+                  <MetricPill label="AQI" value={r.aqi} unit="" color="teal" dark={dark} predicted={nextHour?.aqi} />
+                  <MetricPill label="Pressure" value={r.pressure} unit=" hPa" color="purple" dark={dark} predicted={nextHour?.pressure} />
                 </div>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                <MetricPill label="Temp" value={r.temperature} unit="°C" color="red" dark={dark} predicted={nextHour?.temperature} />
-                <MetricPill label="Humidity" value={r.humidity} unit="%" color="blue" dark={dark} predicted={nextHour?.humidity} />
-                <MetricPill label="AQI" value={r.aqi} unit="" color="teal" dark={dark} predicted={nextHour?.aqi} />
-                <MetricPill label="Pressure" value={r.pressure} unit=" hPa" color="purple" dark={dark} predicted={nextHour?.pressure} />
-              </div>
               {r.recorded_at_display && (
                 <div className={`text-xs mt-1.5 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>
                   Last updated: {r.recorded_at_display}

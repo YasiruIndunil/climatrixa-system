@@ -375,10 +375,10 @@ export default function Alerts() {
   }`
 
   return (
-    <div className={`min-h-full p-4 ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
+    <div className={`min-h-full p-2 sm:p-4 ${dark ? 'bg-gray-950' : 'bg-gray-50'}`}>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className={`text-xl font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>Alert Rules</h1>
           <p className={`text-sm mt-0.5 ${subText}`}>
@@ -387,7 +387,7 @@ export default function Alerts() {
               : 'All clear — no unacknowledged alerts'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {unreadCount > 0 && (
             <div className="flex items-center gap-2 bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl text-sm font-medium">
               <AlertTriangle size={15} className="animate-pulse" />
@@ -395,7 +395,7 @@ export default function Alerts() {
             </div>
           )}
           <button onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold">
             <Plus size={16} /> New rule
           </button>
         </div>
@@ -410,7 +410,7 @@ export default function Alerts() {
               Rules <span className={`font-normal ${subText}`}>({filteredRules?.length ?? 0})</span>
             </h2>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search size={13} className={`absolute left-3 top-2.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}/>
               <input className={inputClass + ' pl-8 pr-8 w-full'} placeholder="Search by sensor, type or email..."
@@ -421,13 +421,13 @@ export default function Alerts() {
                 </button>
               )}
             </div>
-            <select className={inputClass + ' flex-1'} value={ruleSensorFilter} onChange={e => setRuleSensorFilter(e.target.value)}>
+            <select className={inputClass + 'w-full flex-1'} value={ruleSensorFilter} onChange={e => setRuleSensorFilter(e.target.value)}>
               <option value="all">All sensors</option>
               {sensors?.filter(s => s.is_active).map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <select className={inputClass + ' flex-1'} value={ruleTypeFilter} onChange={e => setRuleTypeFilter(e.target.value)}>
+            <select className={inputClass + 'w-full flex-1'} value={ruleTypeFilter} onChange={e => setRuleTypeFilter(e.target.value)}>
               <option value="all">All types</option>
               <option value="temperature_high">Temp High</option>
               <option value="temperature_low">Temp Low</option>

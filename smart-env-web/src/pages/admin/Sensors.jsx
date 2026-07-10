@@ -296,8 +296,8 @@ export default function Sensors() {
         )}
         {filtered?.map(sensor => (
           <Card key={sensor.id} className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
                   sensor.is_active
                     ? dark ? 'bg-teal-500/10 border border-teal-500/20' : 'bg-teal-50 border border-teal-100'
@@ -305,7 +305,7 @@ export default function Sensors() {
                 }`}>
                   <Radio size={18} className={sensor.is_active ? 'text-teal-500' : dark ? 'text-gray-600' : 'text-gray-400'} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className={`font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>{sensor.name}</div>
                   <div className={`flex items-center gap-1 text-xs mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
                     <MapPin size={11} /> {sensor.location}
@@ -322,7 +322,7 @@ export default function Sensors() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 sm:justify-end flex-wrap">
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                   sensor.is_active
                     ? dark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'

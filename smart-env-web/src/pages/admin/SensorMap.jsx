@@ -101,7 +101,7 @@ export default function AdminSensorMap() {
       />
 
       {/* Legend */}
-      <div className={`flex items-center gap-5 mb-4 text-xs ${sub} flex-wrap`}>
+      <div className={`flex items-start gap-3 mb-4 text-xs ${sub} flex-wrap`}>
         <span className="flex items-center gap-1.5">
           <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png"
             className="h-4 w-auto" alt="active"/> Active sensor
@@ -121,7 +121,12 @@ export default function AdminSensorMap() {
       </div>
 
       {/* Map */}
-      <div className={`rounded-2xl border overflow-hidden shadow-sm mb-6 ${dark ? 'border-gray-800' : 'border-gray-200'}`} style={{ height: 480 }}>
+      <div
+          className={`rounded-2xl border overflow-hidden shadow-sm mb-6 ${
+            dark ? 'border-gray-800' : 'border-gray-200'
+          }`}
+          style={{ height: 'clamp(320px, 60vh, 480px)' }}
+        >
         {sensorsLoading ? (
           <div className={`h-full flex items-center justify-center ${dark ? 'bg-gray-900' : 'bg-gray-50'}`}>
             <LoadingSpinner label="Loading sensor map..."/>
@@ -133,7 +138,12 @@ export default function AdminSensorMap() {
             <p className={`text-xs mt-1 ${sub}`}>Add GPS coordinates when registering sensors</p>
           </div>
         ) : (
-          <MapContainer center={[7.2085, 79.8358]} zoom={10} style={{ height: '100%', width: '100%' }}>
+          <MapContainer
+            center={[7.2085, 79.8358]}
+            zoom={10}
+            style={{ height: '100%', width: '100%' }}
+            className="z-0"
+          >
             <TileLayer attribution='© OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
             <FitBounds sensors={sensors}/>
             {sensors.map(sensor => {
@@ -177,7 +187,7 @@ export default function AdminSensorMap() {
                       {r ? (
                         <>
                           <div className="mb-2"><AQIBadge status={r.aqi_status}/></div>
-                          <div className="grid grid-cols-2 gap-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                             {[
                               { label: '🌡️ Temp',     value: `${r.temperature}°C` },
                               { label: '💧 Humidity', value: `${r.humidity}%`      },
@@ -229,9 +239,9 @@ export default function AdminSensorMap() {
                   <span className="text-white text-xs">✨</span>
                 </div>
               )}
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
                 <div>
-                  <div className={`font-semibold text-sm ${head}`}>{sensor.name}</div>
+                  <div className={`font-semibold text-sm truncate ${head}`}>{sensor.name}</div>
                   <div className={`flex items-center gap-1 text-xs mt-0.5 ${sub}`}>
                     <MapPin size={10}/> {sensor.location}
                   </div>

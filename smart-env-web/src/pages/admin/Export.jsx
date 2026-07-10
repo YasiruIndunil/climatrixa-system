@@ -109,16 +109,31 @@ export default function Export() {
                 {sensors?.map(s => <option key={s.id} value={s.id}>{s.name} — {s.location}</option>)}
               </ThemedSelect>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>From date</FieldLabel>
-                <input type="date" className={inputClass} value={readings.date_from} onChange={e => setReadings(f => ({ ...f, date_from: e.target.value }))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>From date</FieldLabel>
+                  <input
+                    type="date"
+                    className={`${inputClass} w-full`}
+                    value={readings.date_from}
+                    onChange={e =>
+                      setReadings(f => ({ ...f, date_from: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>To date</FieldLabel>
+                  <input
+                    type="date"
+                    className={`${inputClass} w-full`}
+                    value={readings.date_to}
+                    onChange={e =>
+                      setReadings(f => ({ ...f, date_to: e.target.value }))
+                    }
+                  />
+                </div>
               </div>
-              <div>
-                <FieldLabel>To date</FieldLabel>
-                <input type="date" className={inputClass} value={readings.date_to} onChange={e => setReadings(f => ({ ...f, date_to: e.target.value }))} />
-              </div>
-            </div>
             <div>
               <FieldLabel>Format</FieldLabel>
               <FormatToggle value={readings.format} onChange={v => setReadings(f => ({ ...f, format: v }))} />
@@ -149,31 +164,31 @@ export default function Export() {
                 {sensors?.map(s => <option key={s.id} value={s.id}>{s.name} — {s.location}</option>)}
               </ThemedSelect>
             </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>From date</FieldLabel>
-                  <input
-                    type="date"
-                    className={`${inputClass} w-full`}
-                    value={alerts.date_from}
-                    onChange={e =>
-                      setAlerts(f => ({ ...f, date_from: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>To date</FieldLabel>
-                  <input
-                    type="date"
-                    className={`${inputClass} w-full`}
-                    value={alerts.date_to}
-                    onChange={e =>
-                      setAlerts(f => ({ ...f, date_to: e.target.value }))
-                    }
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>From date</FieldLabel>
+                <input
+                  type="date"
+                  className={`${inputClass} w-full`}
+                  value={alerts.date_from}
+                  onChange={e =>
+                    setAlerts(f => ({ ...f, date_from: e.target.value }))
+                  }
+                />
               </div>
+
+              <div>
+                <FieldLabel>To date</FieldLabel>
+                <input
+                  type="date"
+                  className={`${inputClass} w-full`}
+                  value={alerts.date_to}
+                  onChange={e =>
+                    setAlerts(f => ({ ...f, date_to: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
             <div>
               
               <FieldLabel>Format</FieldLabel>

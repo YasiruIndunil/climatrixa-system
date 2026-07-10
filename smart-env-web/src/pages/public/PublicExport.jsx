@@ -198,20 +198,31 @@ export default function PublicExport() {
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>From date</label>
-                  <input type="date" className={inputClass}
-                    value={alertsForm.date_from}
-                    onChange={e => setAlertsForm(f => ({ ...f, date_from: e.target.value }))}/>
-                </div>
-                <div>
-                  <label className={labelClass}>To date</label>
-                  <input type="date" className={inputClass}
-                    value={alertsForm.date_to}
-                    onChange={e => setAlertsForm(f => ({ ...f, date_to: e.target.value }))}/>
-                </div>
-              </div>
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <div>
+    <label className={labelClass}>From date</label>
+    <input
+      type="date"
+      className={`${inputClass} w-full`}
+      value={alertsForm.date_from}
+      onChange={e =>
+        setAlertsForm(f => ({ ...f, date_from: e.target.value }))
+      }
+    />
+  </div>
+
+  <div>
+    <label className={labelClass}>To date</label>
+    <input
+      type="date"
+      className={`${inputClass} w-full`}
+      value={alertsForm.date_to}
+      onChange={e =>
+        setAlertsForm(f => ({ ...f, date_to: e.target.value }))
+      }
+    />
+  </div>
+</div>
               <div>
                 <label className={labelClass}>Format</label>
                 <div className="flex gap-3">

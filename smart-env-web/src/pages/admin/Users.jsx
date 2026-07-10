@@ -10,7 +10,7 @@ function Modal({ title, subtitle, onClose, children }) {
   const { dark } = useTheme()
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className={`w-full max-w-md rounded-2xl shadow-2xl border ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+      <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl border ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
         <div className={`px-6 py-5 border-b flex items-center justify-between ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
           <div>
             <h3 className={`font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
@@ -314,7 +314,7 @@ export default function Users() {
 
   return (
     <PageWrapper>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <PageTitle title="Users" subtitle={`${filtered?.length ?? 0} of ${users?.length ?? 0} accounts`} />
         <Tooltip text="Create a new user account">
           <PrimaryButton onClick={() => setCreateOpen(true)}><Plus size={16} /> Add user</PrimaryButton>
@@ -322,8 +322,8 @@ export default function Users() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-5">
-        <div className="relative flex-1">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <div className="relative sm:col-span-1">
           <Search size={14} className={`absolute left-3 top-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`} />
           <ThemedInput className="pl-9 pr-8 w-full" placeholder="Search by name or email..." value={search} onChange={e => setSearch(e.target.value)} />
           {search && (
@@ -332,12 +332,12 @@ export default function Users() {
             </button>
           )}
         </div>
-        <ThemedSelect value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="flex-1">
+        <ThemedSelect value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="w-full">
           <option value="all">All roles</option>
           <option value="admin">Admin</option>
           <option value="public">Public</option>
         </ThemedSelect>
-        <ThemedSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="flex-1">
+        <ThemedSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full">
           <option value="all">All status</option>
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
@@ -345,7 +345,7 @@ export default function Users() {
         {(search || roleFilter !== 'all' || statusFilter !== 'all') && (
           <button
             onClick={() => { setSearch(''); setRoleFilter('all'); setStatusFilter('all') }}
-            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors whitespace-nowrap ${
+            className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors whitespace-nowrap w-full sm:w-auto ${
               dark ? 'border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800'
             }`}
           >
@@ -362,15 +362,20 @@ export default function Users() {
             </div>
           )}
           {filtered?.map(user => (
-            <div key={user.id} className={`px-5 py-4 flex items-center gap-4 transition-colors ${dark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'}`}>
+            <div
+                key={user.id}
+                className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 transition-colors ${
+                  dark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'
+                }`}
+              >
               <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0">
                 {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className={`font-medium text-sm ${dark ? 'text-white' : 'text-gray-900'}`}>{user.full_name || '—'}</div>
-                <div className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{user.email}</div>
+               <div className={`font-medium text-sm truncate ${dark ? 'text-white' : 'text-gray-900'}`}>{user.full_name || '—'}</div>
+               <div className={`text-xs truncate ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{user.email}</div>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 ${
+              <span className={`self-start sm:self-auto text-xs px-2.5 py-1 rounded-full ${
                 user.role === 'admin'
                   ? dark ? 'bg-teal-500/10 text-teal-400' : 'bg-teal-50 text-teal-700'
                   : dark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'
@@ -385,7 +390,7 @@ export default function Users() {
               }`}>
                 {user.is_active ? 'Active' : 'Disabled'}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 self-end sm:self-auto">
                 <Tooltip text="Edit user details">
                   <button onClick={() => setEditUser(user)} className={`p-2 rounded-xl transition-colors ${dark ? 'hover:bg-gray-800 text-gray-500 hover:text-teal-400' : 'hover:bg-gray-100 text-gray-400 hover:text-teal-600'}`}>
                     <Edit2 size={15} />
