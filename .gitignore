@@ -11,3 +11,28 @@ Thumbs.db
 .env
 *.env
 !.env.example
+
+# Node (smart-env-web)
+node_modules/
+dist/
+build/
+.vercel/
+*.local
+
+# Python (smart-env-backend)
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# Logs
+*.log
+npm-debug.log*
+
+# AI model artifacts (stored in Supabase Storage, not git)
+*.pkl
+models/
