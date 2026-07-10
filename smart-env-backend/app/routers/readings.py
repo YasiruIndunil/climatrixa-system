@@ -19,12 +19,18 @@ SLST_OFFSET = timedelta(hours=5, minutes=30)
 
 
 def _to_slst(dt_raw) -> str:
+    """
+    Convert UTC datetime to SLST in Excel/Google Sheets-recognized format
+    (YYYY-MM-DD HH:MM:SS, 24h) so it's treated as a real date/time value —
+    enabling sort and date-filter in spreadsheet tools. Not for UI display.
+    """
     if not dt_raw:
         return ""
     try:
         dt_str = str(dt_raw).replace(" ", "T").replace("+00", "+00:00").replace("+00:00:00", "+00:00")
         dt = datetime.fromisoformat(dt_str)
-        return format_slst(dt)
+        slst_dt = dt + timedelta(hours=5, minutes=30)
+        return slst_dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return str(dt_raw)
 
