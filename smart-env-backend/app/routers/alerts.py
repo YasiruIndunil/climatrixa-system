@@ -143,7 +143,7 @@ async def export_alert_events(
     while True:
         result = (
             build_query()
-            .order("triggered_at", desc=True)
+            .order("triggered_at", desc=False)
             .range(page * page_size, (page + 1) * page_size - 1)
             .execute()
         )
@@ -180,12 +180,15 @@ async def export_alert_events(
         ]
 
     if format == "pdf":
-        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.pagesizes import A4
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet
         buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=18, rightMargin=18, topMargin=24, bottomMargin=18,
+        )
         styles = getSampleStyleSheet()
         elements = [Paragraph("Climatrixa — Alert Events Report", styles["Title"]), Spacer(1, 12)]
         data = [headers] + [row_data(r) for r in rows]
@@ -194,7 +197,7 @@ async def export_alert_events(
             ("BACKGROUND", (0, 0), (-1, 0), colors.orange),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("FONTSIZE", (0, 0), (-1, -1), 6),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
         ]))
