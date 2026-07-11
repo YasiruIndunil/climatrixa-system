@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['app/services/ai_engine.py','app/routers/predictions.py','app/services/mqtt_client.py','app/models/schemas.py']]\")",
-      "Bash(npx oxlint *)",
-      "Bash(npx vite *)"
-    ]
-  }
-}
