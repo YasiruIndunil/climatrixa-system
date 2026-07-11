@@ -22,19 +22,20 @@ const navItems = [
 function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
   const [countdown, setCountdown] = useState(30)
   const isPredicted = event.is_predicted
+  const isAnomaly = event.alert_type === 'anomaly'
   const isHigh = event.alert_type?.includes('high') || event.alert_type?.includes('aqi')
-  // Predicted (AI early warning) = amber theme. Actual (real reading breach) = red/orange theme.
-  const borderColor  = isPredicted ? 'border-amber-400'  : isHigh ? 'border-red-400'   : 'border-orange-400'
-  const barColor     = isPredicted ? 'bg-amber-500'      : isHigh ? 'bg-red-500'        : 'bg-orange-500'
-  const bgColor      = isPredicted ? 'bg-amber-50'       : isHigh ? 'bg-red-50'         : 'bg-orange-50'
-  const labelColor   = isPredicted ? 'text-amber-500'    : isHigh ? 'text-red-500'      : 'text-orange-500'
-  const titleColor   = isPredicted ? 'text-amber-900'    : isHigh ? 'text-red-900'      : 'text-orange-900'
-  const valueColor   = isPredicted ? 'text-amber-600'    : isHigh ? 'text-red-600'      : 'text-orange-600'
-  const timeColor    = isPredicted ? 'text-amber-400'    : isHigh ? 'text-red-400'      : 'text-orange-400'
-  const ackColor     = isPredicted ? 'bg-amber-600 hover:bg-amber-700' : isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
-  const dismissColor = isPredicted ? 'border-amber-200 text-amber-600 hover:bg-amber-100' : isHigh ? 'border-red-200 text-red-600 hover:bg-red-100' : 'border-orange-200 text-orange-600 hover:bg-orange-100'
-  const iconBg       = isPredicted ? 'bg-amber-100' : isHigh ? 'bg-red-100' : 'bg-orange-100'
-  const icon = isPredicted ? '✨'
+  // Predicted (AI early warning) = amber theme. Actual (real reading breach) = red/orange theme. Anomaly = purple.
+  const borderColor  = isPredicted ? 'border-amber-400'  : isAnomaly ? 'border-purple-400' : isHigh ? 'border-red-400'   : 'border-orange-400'
+  const barColor     = isPredicted ? 'bg-amber-500'      : isAnomaly ? 'bg-purple-500' : isHigh ? 'bg-red-500'        : 'bg-orange-500'
+  const bgColor      = isPredicted ? 'bg-amber-50'       : isAnomaly ? 'bg-purple-50' : isHigh ? 'bg-red-50'         : 'bg-orange-50'
+  const labelColor   = isPredicted ? 'text-amber-500'    : isAnomaly ? 'text-purple-500' : isHigh ? 'text-red-500'      : 'text-orange-500'
+  const titleColor   = isPredicted ? 'text-amber-900'    : isAnomaly ? 'text-purple-900' : isHigh ? 'text-red-900'      : 'text-orange-900'
+  const valueColor   = isPredicted ? 'text-amber-600'    : isAnomaly ? 'text-purple-600' : isHigh ? 'text-red-600'      : 'text-orange-600'
+  const timeColor    = isPredicted ? 'text-amber-400'    : isAnomaly ? 'text-purple-400' : isHigh ? 'text-red-400'      : 'text-orange-400'
+  const ackColor     = isPredicted ? 'bg-amber-600 hover:bg-amber-700' : isAnomaly ? 'bg-purple-600 hover:bg-purple-700' : isHigh ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+  const dismissColor = isPredicted ? 'border-amber-200 text-amber-600 hover:bg-amber-100' : isAnomaly ? 'border-purple-200 text-purple-600 hover:bg-purple-100' : isHigh ? 'border-red-200 text-red-600 hover:bg-red-100' : 'border-orange-200 text-orange-600 hover:bg-orange-100'
+  const iconBg       = isPredicted ? 'bg-amber-100' : isAnomaly ? 'bg-purple-100' : isHigh ? 'bg-red-100' : 'bg-orange-100'
+  const icon = isPredicted ? '✨' : isAnomaly ? '🔍'
     : event.alert_type?.includes('temperature') ? '🌡️'
     : event.alert_type?.includes('humidity') ? '💧'
     : event.alert_type?.includes('aqi') ? '🌫️' : '⚠️'
@@ -59,11 +60,14 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
               <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center animate-bounce text-2xl`}>{icon}</div>
               <div>
                 <div className={`text-xs font-bold uppercase tracking-widest ${labelColor} mb-0.5`}>
-                  {isPredicted ? '✨ AI Predicted Warning' : '🚨 Alert'}
+                  {isPredicted ? '✨ AI Predicted Warning' : isAnomaly ? '🔍 AI Anomaly Detected' : '🚨 Alert'}
                 </div>
-                <div className={`text-lg font-bold ${titleColor}`}>{event.alert_type?.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+                <div className={`text-lg font-bold ${titleColor}`}>{isAnomaly ? 'Unusual Pattern' : event.alert_type?.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
                 {isPredicted && event.predicted_hours_ahead && (
                   <div className="text-xs font-medium text-amber-600 mt-0.5">Expected in ~{event.predicted_hours_ahead}h — not yet happened</div>
+                )}
+                {isAnomaly && (
+                  <div className="text-xs font-medium text-purple-600 mt-0.5">Detected by machine learning, not a fixed threshold</div>
                 )}
               </div>
             </div>
@@ -71,17 +75,19 @@ function GlobalAlertPopup({ event, onDismiss, onAcknowledge }) {
           </div>
           <div className="bg-white rounded-xl p-4 mb-4">
             <p className="text-sm font-medium text-gray-700 mb-3">{event.message}</p>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${valueColor}`}>{event.actual_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">{isPredicted ? 'Predicted' : 'Actual'}</div>
+            {!isAnomaly && (
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${valueColor}`}>{event.actual_value?.toFixed(1)}</div>
+                  <div className="text-xs text-gray-400">{isPredicted ? 'Predicted' : 'Actual'}</div>
+                </div>
+                <div className="text-2xl text-gray-300">→</div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-400">{event.threshold_value?.toFixed(1)}</div>
+                  <div className="text-xs text-gray-400">Limit</div>
+                </div>
               </div>
-              <div className="text-2xl text-gray-300">→</div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-400">{event.threshold_value?.toFixed(1)}</div>
-                <div className="text-xs text-gray-400">Limit</div>
-              </div>
-            </div>
+            )}
           </div>
           <div className="flex gap-3">
             <button onClick={onDismiss} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${dismissColor}`}>Dismiss</button>
@@ -128,12 +134,14 @@ export default function PublicLayout() {
 
   const checkAlerts = () => {
     if (!events) return
-    const REMIND_MS = 60 * 1000
+    const REMIND_MS = 60 * 1000            // threshold/predicted alerts — remind every 1 min
+    const ANOMALY_REMIND_MS = 15 * 60 * 1000  // anomaly alerts — remind every 15 min (lower urgency, exploratory)
     const now = Date.now()
     const newUnread = events.find(e => {
       if (e.acknowledged) return false
       const dismissedAt = dismissedAlerts[e.id]
-      return !dismissedAt || (now - dismissedAt) >= REMIND_MS
+      const interval = e.alert_type === 'anomaly' ? ANOMALY_REMIND_MS : REMIND_MS
+      return !dismissedAt || (now - dismissedAt) >= interval
     })
     if (newUnread && !emergencyEvent) {
       setEmergencyEvent(newUnread)

@@ -75,7 +75,24 @@ async def list_alert_events(sensor_id: str = None, limit: int = 50):
 
 
 @router.patch("/events/{event_id}/acknowledge")
-async def acknowledge_alert(event_id: str, current_user: dict = Depends(require_admin)):
+async def acknowledge_alert(event_id: str, current_user: dict = Depends(get_current_user)):
+    # Public users can only acknowledge alerts for sensors they're assigned to
+    if current_user.get("role") != "admin":
+        event = db.table("alert_events").select("sensor_id").eq("id", event_id).execute()
+        if not event.data:
+            raise HTTPException(status_code=404, detail="Alert event not found")
+        sensor_id = event.data[0]["sensor_id"]
+
+        access = (
+            db.table("user_sensor_access")
+            .select("id")
+            .eq("user_id", current_user.get("sub"))
+            .eq("sensor_id", sensor_id)
+            .execute()
+        )
+        if not access.data:
+            raise HTTPException(status_code=403, detail="You don't have access to this sensor's alerts")
+
     result = db.table("alert_events").update({
         "acknowledged": True,
         "acknowledged_at": "NOW()",
@@ -94,20 +111,18 @@ async def export_alert_events(
     format: str = "csv",
     current_user: dict = Depends(get_current_user)
 ):
-    allowed_sensor_ids = None
     if current_user.get("role") != "admin":
+        if not sensor_id:
+            raise HTTPException(status_code=400, detail="Please select a sensor to export")
         access = (
             db.table("user_sensor_access")
-            .select("sensor_id")
+            .select("id")
             .eq("user_id", current_user.get("sub"))
+            .eq("sensor_id", sensor_id)
             .execute()
         )
-        allowed_sensor_ids = [row["sensor_id"] for row in (access.data or [])]
-        if sensor_id and sensor_id not in allowed_sensor_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this sensor"
-            )
+        if not access.data:
+            raise HTTPException(status_code=403, detail="You don't have access to this sensor")
 
     def build_query():
         """Build a fresh query with filters — must rebuild each page since
@@ -115,8 +130,6 @@ async def export_alert_events(
         q = db.table("alert_events").select("*")
         if sensor_id:
             q = q.eq("sensor_id", sensor_id)
-        elif allowed_sensor_ids is not None:
-            q = q.in_("sensor_id", allowed_sensor_ids)
         if from_:
             q = q.gte("triggered_at", _slst_to_utc(from_, end_of_day=False))
         if to:
@@ -125,22 +138,21 @@ async def export_alert_events(
 
     # Paginate to fetch all records beyond Supabase's 1000 default limit
     all_rows = []
-    if allowed_sensor_ids is None or allowed_sensor_ids or sensor_id:
-        page = 0
-        page_size = 1000
-        while True:
-            result = (
-                build_query()
-                .order("triggered_at", desc=True)
-                .range(page * page_size, (page + 1) * page_size - 1)
-                .execute()
-            )
-            if not result.data:
-                break
-            all_rows.extend(result.data)
-            if len(result.data) < page_size:
-                break
-            page += 1
+    page = 0
+    page_size = 1000
+    while True:
+        result = (
+            build_query()
+            .order("triggered_at", desc=True)
+            .range(page * page_size, (page + 1) * page_size - 1)
+            .execute()
+        )
+        if not result.data:
+            break
+        all_rows.extend(result.data)
+        if len(result.data) < page_size:
+            break
+        page += 1
     rows = all_rows
 
     # Fetch sensor info map
