@@ -53,7 +53,7 @@ export default function SensorDetail() {
 
   // Alert subscriptions — backend: GET /subscriptions/{user_id}/{sensor_id}
   // Returns: { temperature: bool, humidity: bool, aqi: bool, pressure: bool }
-  const { data: subscription, refetch: refetchSubs } = useQuery({
+  const { data: subscription, isLoading: subsLoading, refetch: refetchSubs } = useQuery({
     queryKey: ['subscriptions', sensorId, user?.id],
     queryFn: async () => {
       try {
@@ -66,7 +66,6 @@ export default function SensorDetail() {
       }
     },
     enabled: !!sensorId && !!user?.id,
-    retry: false,
   })
 
   // AI Forecast
@@ -183,13 +182,15 @@ export default function SensorDetail() {
                 </div>
                 <button
                   onClick={() => toggleSubscription(p.key)}
-                  disabled={toggling}
-                  title={subscribed ? 'Disable alerts for this parameter' : 'Enable alerts for this parameter'}
+                  disabled={toggling || subsLoading}
+                  title={subsLoading ? 'Loading alert status…' : subscribed ? 'Disable alerts for this parameter' : 'Enable alerts for this parameter'}
                   className={`p-1.5 rounded-lg transition-colors ${
-                    subscribed
+                    subsLoading
+                      ? dark ? 'text-gray-700' : 'text-gray-200'
+                      : subscribed
                       ? dark ? 'text-teal-400 hover:bg-teal-500/10' : 'text-teal-600 hover:bg-teal-50'
                       : dark ? 'text-gray-600 hover:bg-gray-800' : 'text-gray-300 hover:bg-gray-100'
-                  } ${toggling ? 'opacity-50' : ''}`}
+                  } ${(toggling || subsLoading) ? 'opacity-50' : ''}`}
                 >
                   {subscribed ? <Bell size={14}/> : <BellOff size={14}/>}
                 </button>
@@ -199,7 +200,7 @@ export default function SensorDetail() {
               </div>
               <div className={`text-xs ${sub}`}>{p.label}</div>
               <div className={`text-xs mt-1 font-medium ${subscribed ? 'text-teal-500' : sub}`}>
-                {subscribed ? '🔔 Alerts on' : '🔕 Alerts off'}
+                {subsLoading ? '…' : subscribed ? '🔔 Alerts on' : '🔕 Alerts off'}
               </div>
             </div>
           )

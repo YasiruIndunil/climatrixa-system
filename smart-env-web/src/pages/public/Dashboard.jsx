@@ -114,7 +114,7 @@ const PARAM_LABELS = [
   { key: 'pressure',    label: 'Pressure', icon: Gauge },
 ]
 
-function SensorReadingCard({ reading, subscription, forecast, dark }) {
+function SensorReadingCard({ reading, subscription, subscriptionLoading, forecast, dark }) {
   // Which params have alerts on?
   const enabledParams = PARAM_LABELS.filter(p => subscription?.[p.key] === true)
   const anyEnabled = enabledParams.length > 0
@@ -148,7 +148,9 @@ function SensorReadingCard({ reading, subscription, forecast, dark }) {
       </div>
       {/* Alert subscription status row */}
       <div className={`px-5 pb-4 flex items-center gap-2 flex-wrap`}>
-        {anyEnabled ? (
+        {subscriptionLoading ? (
+          <span className={`text-xs ${dark ? 'text-gray-600' : 'text-gray-400'}`}>Loading alert status…</span>
+        ) : anyEnabled ? (
           <>
             <Bell size={12} className="text-teal-500 shrink-0"/>
             <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Alerts on:</span>
@@ -334,11 +336,13 @@ export default function Dashboard() {
         }
       },
       enabled: !!user?.id,
-      retry: false,
     }))
   })
   const subscriptionMap = Object.fromEntries(
     subscriptionQueries.map(q => [q.data?.sensorId, q.data?.data]).filter(([k]) => k)
+  )
+  const subscriptionLoadingMap = Object.fromEntries(
+    sensorIdList.map((id, i) => [id, subscriptionQueries[i]?.isLoading])
   )
 
   // Fetch AI forecast for each assigned sensor
@@ -496,7 +500,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} subscription={subscriptionMap[r.sensor_id]} forecast={forecastMap[r.sensor_id]} dark={dark}/>)}
+          {myReadings.map(r => <SensorReadingCard key={r.sensor_id} reading={r} subscription={subscriptionMap[r.sensor_id]} subscriptionLoading={subscriptionLoadingMap[r.sensor_id]} forecast={forecastMap[r.sensor_id]} dark={dark}/>)}
         </div>
       )}
 
