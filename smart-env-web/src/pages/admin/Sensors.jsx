@@ -195,8 +195,8 @@ export default function Sensors() {
   }
 
   const { data: sensors, isLoading } = useQuery({
-    queryKey: ['sensors'],
-    queryFn: () => api.get('/sensors/').then(r => r.data),
+    queryKey: ['sensors', 'all'],
+    queryFn: () => api.get('/sensors/all').then(r => r.data),
   })
 
   const saveSensor = async form => {

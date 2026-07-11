@@ -17,6 +17,17 @@ async def list_sensors():
     return result.data
 
 
+@router.get("/all", response_model=List[SensorResponse])
+async def list_all_sensors(admin: dict = Depends(require_admin)):
+    """
+    Get every sensor, active and inactive. Admin only — used by the
+    Sensors management page so a deactivated sensor doesn't disappear
+    and become impossible to re-activate.
+    """
+    result = db.table("sensors").select("*").execute()
+    return result.data
+
+
 @router.get("/{sensor_id}", response_model=SensorResponse)
 async def get_sensor(sensor_id: str):
     """Get a single sensor by its ID."""
