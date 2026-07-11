@@ -173,6 +173,11 @@ def train_models(sensor_id: str) -> dict:
 def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
     forecast_rows = {h: {"hours_ahead": h, "temperature": None, "humidity": None, "aqi": None, "pressure": None} for h in range(1, hours_ahead + 1)}
 
+    # Fetch the truly live latest reading once — used to anchor every
+    # parameter's forecast so it starts from current reality, not from
+    # the model's own possibly-lagged extrapolation or a stale training snapshot
+    live_df = _get_recent_readings(sensor_id, n=1)
+
     for param in ["temperature", "humidity", "aqi", "pressure"]:
         filename = f"forecast_{sensor_id}_{param}.pkl"
         try:
@@ -215,6 +220,21 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
             steps = hours_ahead * 6
             pred = model.forecast(steps)
             pred_values = pred.values
+
+            # ── Bias correction: anchor to the ACTUAL live latest reading ──
+            # ExponentialSmoothing's own extrapolated starting point can lag
+            # behind reality, AND the training series itself is a snapshot
+            # from whenever the model was last trained (readings keep
+            # arriving via MQTT every ~30s after that). We shift the whole
+            # forecast curve to start from the live value, while preserving
+            # the trend/seasonal SHAPE the model learned.
+            if not live_df.empty and param in live_df.columns and live_df[param].notna().any():
+                latest_actual = float(live_df[param].iloc[-1])
+            else:
+                latest_actual = float(series.iloc[-1])
+            model_start = float(pred_values[0])
+            bias = latest_actual - model_start
+            pred_values = pred_values + bias
 
             for h in range(1, hours_ahead + 1):
                 hour_preds = pred_values[(h - 1) * 6: h * 6]
