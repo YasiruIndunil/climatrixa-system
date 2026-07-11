@@ -11,6 +11,7 @@ Model persistence:
   - Retrain via POST /ai/train/{sensor_id}
 """
 import io
+import asyncio
 import joblib
 import numpy as np
 import pandas as pd
@@ -384,43 +385,67 @@ def check_reading_anomaly(sensor_id: str, reading: dict) -> tuple[bool, Optional
     return True, desc
 
 
+_last_anomaly_check: dict = {}   # sensor_id -> timestamp
+_ANOMALY_CHECK_INTERVAL = 60      # seconds — don't re-check every single reading
+
+
 async def check_and_log_anomaly(sensor_id: str, reading: dict):
     """
     Score the reading and, if anomalous, create an alert_event —
     deduped so only one active anomaly alert exists per sensor at a time.
     Call this from the MQTT handler right after check_and_trigger_alerts.
+
+    Throttled to once per minute per sensor, and all blocking Supabase
+    calls run in a background thread — anomaly scoring must NEVER block
+    the shared FastAPI event loop, since that loop also serves every
+    other API and WebSocket request. Without this, a burst of MQTT
+    readings (which can arrive every 1-2 seconds) would queue up
+    blocking calls and stall the entire app.
     """
-    is_anomaly, desc = check_reading_anomaly(sensor_id, reading)
-    if not is_anomaly:
-        return
+    now = datetime.now(timezone.utc).timestamp()
+    last = _last_anomaly_check.get(sensor_id, 0)
+    if (now - last) < _ANOMALY_CHECK_INTERVAL:
+        return  # Checked recently — skip to avoid overloading the event loop
+    _last_anomaly_check[sensor_id] = now
 
-    try:
-        existing = (
-            db.table("alert_events")
-            .select("id")
-            .eq("sensor_id", sensor_id)
-            .eq("alert_type", "anomaly")
-            .eq("acknowledged", False)
-            .execute()
-        )
-        if existing.data:
-            return  # Already have an unacknowledged anomaly alert — don't spam
+    def _blocking_work():
+        is_anomaly, desc = check_reading_anomaly(sensor_id, reading)
+        if not is_anomaly:
+            return None
 
-        db.table("alert_events").insert({
-            "sensor_id":       sensor_id,
-            "alert_type":      "anomaly",
-            "actual_value":    reading.get("temperature") or 0,
-            "threshold_value": 0,
-            "message":         desc,
-            "is_predicted":    False,
-        }).execute()
-        print(f"[AI] Anomaly logged for sensor {sensor_id}: {desc}")
+        try:
+            existing = (
+                db.table("alert_events")
+                .select("id")
+                .eq("sensor_id", sensor_id)
+                .eq("alert_type", "anomaly")
+                .eq("acknowledged", False)
+                .execute()
+            )
+            if existing.data:
+                return None  # Already have an unacknowledged anomaly alert
 
+            db.table("alert_events").insert({
+                "sensor_id":       sensor_id,
+                "alert_type":      "anomaly",
+                "actual_value":    reading.get("temperature") or 0,
+                "threshold_value": 0,
+                "message":         desc,
+                "is_predicted":    False,
+            }).execute()
+            print(f"[AI] Anomaly logged for sensor {sensor_id}: {desc}")
+            return desc
+        except Exception as e:
+            print(f"[AI] Failed to log anomaly for {sensor_id}: {e}")
+            return None
+
+    # Run all the blocking Supabase Storage/DB calls in a thread pool —
+    # this frees the event loop to keep serving other requests immediately
+    desc = await asyncio.to_thread(_blocking_work)
+
+    if desc:
         try:
             from app.core.ws_manager import manager
             await manager.broadcast({"event": "alert_triggered", "data": {"sensor_id": sensor_id, "message": desc}})
         except Exception:
             pass
-
-    except Exception as e:
-        print(f"[AI] Failed to log anomaly for {sensor_id}: {e}")
