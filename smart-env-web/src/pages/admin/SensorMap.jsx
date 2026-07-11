@@ -63,7 +63,7 @@ export default function AdminSensorMap() {
 
   const { data: allSensors, isLoading: sensorsLoading } = useQuery({
     queryKey: ['sensors-map'],
-    queryFn: () => api.get('/sensors/').then(r => r.data),
+    queryFn: () => api.get('/sensors/?include_inactive=true').then(r => r.data),
   })
 
   const { data: readings } = useQuery({

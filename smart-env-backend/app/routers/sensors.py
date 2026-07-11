@@ -8,12 +8,17 @@ router = APIRouter(prefix="/sensors", tags=["Sensors"])
 
 
 @router.get("/", response_model=List[SensorResponse])
-async def list_sensors():
+async def list_sensors(include_inactive: bool = False):
     """
-    Get all active sensors.
+    Get sensors. By default only active ones; pass ?include_inactive=true
+    to also include deactivated sensors (used by the sensor map so a
+    deactivated sensor doesn't just disappear off the map).
     Public endpoint — no login required.
     """
-    result = db.table("sensors").select("*").eq("is_active", True).execute()
+    query = db.table("sensors").select("*")
+    if not include_inactive:
+        query = query.eq("is_active", True)
+    result = query.execute()
     return result.data
 
 
