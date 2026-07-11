@@ -30,12 +30,16 @@ export default function Export() {
   }
 
   const handleReadings = async () => {
+    if (!readings.date_from || !readings.date_to) {
+      toast('Please select both a from and to date', 'error')
+      return
+    }
     setExportingR(true)
     try {
       const params = new URLSearchParams()
       if (readings.sensor_id) params.append('sensor_id', readings.sensor_id)
-      if (readings.date_from) params.append('from', readings.date_from)
-      if (readings.date_to)   params.append('to', readings.date_to)
+      params.append('from', readings.date_from)
+      params.append('to', readings.date_to)
       params.append('format', readings.format)
       params.append('_ts', Date.now()) // cache-bust — ensures fresh data on every export, not a stale browser-cached response
       const res = await api.get(`/readings/export?${params}`, { responseType: 'blob', headers: { 'Cache-Control': 'no-cache' } })
@@ -48,12 +52,16 @@ export default function Export() {
   }
 
   const handleAlerts = async () => {
+    if (!alerts.date_from || !alerts.date_to) {
+      toast('Please select both a from and to date', 'error')
+      return
+    }
     setExportingA(true)
     try {
       const params = new URLSearchParams()
       if (alerts.sensor_id) params.append('sensor_id', alerts.sensor_id)
-      if (alerts.date_from) params.append('from', alerts.date_from)
-      if (alerts.date_to)   params.append('to', alerts.date_to)
+      params.append('from', alerts.date_from)
+      params.append('to', alerts.date_to)
       params.append('format', alerts.format)
       params.append('_ts', Date.now())
       const res = await api.get(`/alerts/events/export?${params}`, { responseType: 'blob', headers: { 'Cache-Control': 'no-cache' } })
@@ -111,9 +119,10 @@ export default function Export() {
             </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="min-w-0">
-                  <FieldLabel>From date</FieldLabel>
+                  <FieldLabel>From date <span className="text-red-500">*</span></FieldLabel>
                   <input
                     type="date"
+                    required
                     className={`${inputClass} w-full min-w-0`}
                     value={readings.date_from}
                     onChange={e =>
@@ -123,9 +132,10 @@ export default function Export() {
                 </div>
 
                 <div className="min-w-0">
-                  <FieldLabel>To date</FieldLabel>
+                  <FieldLabel>To date <span className="text-red-500">*</span></FieldLabel>
                   <input
                     type="date"
+                    required
                     className={`${inputClass} w-full min-w-0`}
                     value={readings.date_to}
                     onChange={e =>
@@ -166,9 +176,10 @@ export default function Export() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="min-w-0">
-                <FieldLabel>From date</FieldLabel>
+                <FieldLabel>From date <span className="text-red-500">*</span></FieldLabel>
                 <input
                   type="date"
+                  required
                   className={`${inputClass} w-full min-w-0`}
                   value={alerts.date_from}
                   onChange={e =>
@@ -178,9 +189,10 @@ export default function Export() {
               </div>
 
               <div className="min-w-0">
-                <FieldLabel>To date</FieldLabel>
+                <FieldLabel>To date <span className="text-red-500">*</span></FieldLabel>
                 <input
                   type="date"
+                  required
                   className={`${inputClass} w-full min-w-0`}
                   value={alerts.date_to}
                   onChange={e =>

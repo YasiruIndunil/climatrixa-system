@@ -46,20 +46,26 @@ export default function PublicExport() {
       toast('Please select a sensor', 'error')
       return
     }
+    if (!readingsForm.date_from || !readingsForm.date_to) {
+      toast('Please select both a from and to date', 'error')
+      return
+    }
     setExportingR(true)
     try {
-      const params = new URLSearchParams({ sensor_id: readingsForm.sensor_id })
-      if (readingsForm.date_from) params.append('from', readingsForm.date_from)
-      if (readingsForm.date_to)   params.append('to',   readingsForm.date_to)
+      const params = new URLSearchParams({ sensor_id: readingsForm.sensor_id, format: readingsForm.format })
+      params.append('from', readingsForm.date_from)
+      params.append('to',   readingsForm.date_to)
       const res = await api.get(`/readings/export?${params}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([res.data]))
       const a   = document.createElement('a')
       a.href     = url
-      a.download = `climatrixa_readings_${readingsForm.sensor_id}_${new Date().toISOString().slice(0, 10)}.csv`
+      const ext = readingsForm.format === 'pdf' ? 'pdf' : 'csv'
+      a.download = `climatrixa_readings_${readingsForm.sensor_id}_${new Date().toISOString().slice(0, 10)}.${ext}`
       a.click()
       window.URL.revokeObjectURL(url)
       toast('Readings downloaded successfully')
-    } catch {
+    } catch (err) {
+      console.error('Readings export failed:', err)
       toast('Export failed — please try again', 'error')
     } finally { setExportingR(false) }
   }
@@ -69,20 +75,26 @@ export default function PublicExport() {
       toast('Please select a sensor', 'error')
       return
     }
+    if (!alertsForm.date_from || !alertsForm.date_to) {
+      toast('Please select both a from and to date', 'error')
+      return
+    }
     setExportingA(true)
     try {
-      const params = new URLSearchParams({ sensor_id: alertsForm.sensor_id })
-      if (alertsForm.date_from) params.append('from', alertsForm.date_from)
-      if (alertsForm.date_to)   params.append('to',   alertsForm.date_to)
+      const params = new URLSearchParams({ sensor_id: alertsForm.sensor_id, format: alertsForm.format })
+      params.append('from', alertsForm.date_from)
+      params.append('to',   alertsForm.date_to)
       const res = await api.get(`/alerts/events/export?${params}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([res.data]))
       const a   = document.createElement('a')
       a.href     = url
-      a.download = `climatrixa_alerts_${alertsForm.sensor_id}_${new Date().toISOString().slice(0, 10)}.csv`
+      const ext = alertsForm.format === 'pdf' ? 'pdf' : 'csv'
+      a.download = `climatrixa_alerts_${alertsForm.sensor_id}_${new Date().toISOString().slice(0, 10)}.${ext}`
       a.click()
       window.URL.revokeObjectURL(url)
       toast('Alert events downloaded successfully')
-    } catch {
+    } catch (err) {
+      console.error('Alert events export failed:', err)
       toast('Alert events export not yet available', 'error')
     } finally { setExportingA(false) }
   }
@@ -131,9 +143,10 @@ export default function PublicExport() {
               </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="min-w-0">
-                    <label className={labelClass}>From date</label>
+                    <label className={labelClass}>From date <span className="text-red-500">*</span></label>
                     <input
                       type="date"
+                      required
                       className={`${inputClass} w-full min-w-0`}
                       value={readingsForm.date_from}
                       onChange={e =>
@@ -143,9 +156,10 @@ export default function PublicExport() {
                   </div>
 
                   <div className="min-w-0">
-                    <label className={labelClass}>To date</label>
+                    <label className={labelClass}>To date <span className="text-red-500">*</span></label>
                     <input
                       type="date"
+                      required
                       className={`${inputClass} w-full min-w-0`}
                       value={readingsForm.date_to}
                       onChange={e =>
@@ -200,9 +214,10 @@ export default function PublicExport() {
               </div>
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
   <div className="min-w-0">
-    <label className={labelClass}>From date</label>
+    <label className={labelClass}>From date <span className="text-red-500">*</span></label>
     <input
       type="date"
+      required
       className={`${inputClass} w-full min-w-0`}
       value={alertsForm.date_from}
       onChange={e =>
@@ -212,9 +227,10 @@ export default function PublicExport() {
   </div>
 
   <div className="min-w-0">
-    <label className={labelClass}>To date</label>
+    <label className={labelClass}>To date <span className="text-red-500">*</span></label>
     <input
       type="date"
+      required
       className={`${inputClass} w-full min-w-0`}
       value={alertsForm.date_to}
       onChange={e =>
