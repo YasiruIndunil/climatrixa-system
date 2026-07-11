@@ -16,7 +16,6 @@ import io
 import joblib
 import numpy as np
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from datetime import datetime, timezone
 from app.core.database import db
@@ -277,19 +276,14 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
 
     params = ["temperature", "humidity", "aqi", "pressure"]
 
-    # The 4 params are independent — download/fit/forecast them concurrently
-    # instead of one after another. Combined with the fitted-model cache in
-    # _get_fitted_model, a cold request now pays for 4 parallel fits instead
-    # of 4 sequential ones, and a warm request only pays for 4 cheap
-    # .forecast() calls.
-    with ThreadPoolExecutor(max_workers=len(params)) as pool:
-        futures = {
-            pool.submit(_forecast_one_param, sensor_id, param, live_df, hours_ahead): param
-            for param in params
-        }
-        for future in futures:
-            param = futures[future]
-            for h, val in future.result().items():
-                forecast_rows[h][param] = val
+    # Sequential on purpose: Render's shared vCPU gives no real benefit from
+    # threading 4 CPU-bound statsmodels fits, and concurrent threads hammering
+    # the single Supabase client here previously caused requests to hang
+    # indefinitely instead of just being slow. The fitted-model cache in
+    # _get_fitted_model is what actually makes repeat requests fast — a warm
+    # request only pays for 4 cheap .forecast() calls either way.
+    for param in params:
+        for h, val in _forecast_one_param(sensor_id, param, live_df, hours_ahead).items():
+            forecast_rows[h][param] = val
 
     return [forecast_rows[h] for h in sorted(forecast_rows.keys())]
