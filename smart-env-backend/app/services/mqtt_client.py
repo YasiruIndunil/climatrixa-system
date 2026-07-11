@@ -1,10 +1,13 @@
 """
-MQTT Client Service — v2.1
-───────────────────────────
+MQTT Client Service — v2.2
+───────────────────────────────────────────────
 Brand Key + MAC Address authentication.
-No per-device api_key needed.
-All Climatrixa devices share one brand key.
 Device identity resolved via MAC address lookup in sensors table.
+
+On every incoming reading:
+  1. Insert into readings table
+  2. check_and_trigger_alerts() — threshold-based alerts (real-time)
+  3. check_and_log_anomaly()    — Isolation Forest anomaly scoring (real-time)
 """
 import json
 import ssl
@@ -13,6 +16,7 @@ import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
 from app.services.alert_service import check_and_trigger_alerts
+from app.services.ai_engine import check_and_log_anomaly
 
 settings = get_settings()
 
@@ -35,12 +39,12 @@ def _on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
 
-        # ── Step 1: Validate brand key ────────────────────────────
+        # ── Step 1: Validate brand key ──────────────────────────────
         if payload.get("brand_key") != BRAND_KEY:
-            print(f"[MQTT] Rejected — invalid brand key")
+            print("[MQTT] Rejected — invalid brand key")
             return
 
-        # ── Step 2: Look up sensor by MAC address ─────────────────
+        # ── Step 2: Look up sensor by MAC address ───────────────────
         mac = payload.get("mac", "").upper()
         if not mac:
             print("[MQTT] Rejected — no MAC address in payload")
@@ -58,12 +62,12 @@ def _on_message(client, userdata, msg):
             return
 
         if not sensor.data[0]["is_active"]:
-            print(f"[MQTT] Rejected — sensor is inactive")
+            print("[MQTT] Rejected — sensor is inactive")
             return
 
         sensor_id = sensor.data[0]["id"]
 
-        # ── Step 3: Insert reading ─────────────────────────────────
+        # ── Step 3: Insert reading ───────────────────────────────────
         insert_data = {
             "sensor_id":   sensor_id,
             "temperature": payload["temperature"],
@@ -82,19 +86,20 @@ def _on_message(client, userdata, msg):
               f"temp={payload['temperature']}°C "
               f"aqi={payload['aqi']}")
 
-        # ── Step 4: Check alert rules ─────────────────────────────
-        # _on_message is a sync callback — run async alert check
-        # using the shared event loop from the main FastAPI thread
+        # ── Step 4: Check alert rules + anomaly (real-time) ──────────
+        # _on_message is a sync callback — run async checks using the
+        # shared event loop from the main FastAPI thread
         global _event_loop
+
+        async def _run_checks():
+            await check_and_trigger_alerts(sensor_id, reading)
+            await check_and_log_anomaly(sensor_id, reading)
+
         if _event_loop and _event_loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                check_and_trigger_alerts(sensor_id, reading),
-                _event_loop
-            )
+            asyncio.run_coroutine_threadsafe(_run_checks(), _event_loop)
         else:
-            # Fallback: create a new event loop for this thread
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(check_and_trigger_alerts(sensor_id, reading))
+            loop.run_until_complete(_run_checks())
             loop.close()
 
     except Exception as e:
@@ -116,7 +121,6 @@ def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties=N
 def start_mqtt_listener():
     global _client, _event_loop
 
-    # Capture the running event loop from FastAPI's async context
     try:
         _event_loop = asyncio.get_event_loop()
     except RuntimeError:
