@@ -130,11 +130,11 @@ export default function PublicExport() {
                 </select>
               </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <label className={labelClass}>From date</label>
                     <input
                       type="date"
-                      className={`${inputClass} w-full`}
+                      className={`${inputClass} w-full min-w-0`}
                       value={readingsForm.date_from}
                       onChange={e =>
                         setReadingsForm(f => ({ ...f, date_from: e.target.value }))
@@ -142,11 +142,11 @@ export default function PublicExport() {
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className={labelClass}>To date</label>
                     <input
                       type="date"
-                      className={`${inputClass} w-full`}
+                      className={`${inputClass} w-full min-w-0`}
                       value={readingsForm.date_to}
                       onChange={e =>
                         setReadingsForm(f => ({ ...f, date_to: e.target.value }))
@@ -199,11 +199,11 @@ export default function PublicExport() {
                 </select>
               </div>
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-  <div>
+  <div className="min-w-0">
     <label className={labelClass}>From date</label>
     <input
       type="date"
-      className={`${inputClass} w-full`}
+      className={`${inputClass} w-full min-w-0`}
       value={alertsForm.date_from}
       onChange={e =>
         setAlertsForm(f => ({ ...f, date_from: e.target.value }))
@@ -211,11 +211,11 @@ export default function PublicExport() {
     />
   </div>
 
-  <div>
+  <div className="min-w-0">
     <label className={labelClass}>To date</label>
     <input
       type="date"
-      className={`${inputClass} w-full`}
+      className={`${inputClass} w-full min-w-0`}
       value={alertsForm.date_to}
       onChange={e =>
         setAlertsForm(f => ({ ...f, date_to: e.target.value }))

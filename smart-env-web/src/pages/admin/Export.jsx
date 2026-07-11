@@ -110,11 +110,11 @@ export default function Export() {
               </ThemedSelect>
             </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <FieldLabel>From date</FieldLabel>
                   <input
                     type="date"
-                    className={`${inputClass} w-full`}
+                    className={`${inputClass} w-full min-w-0`}
                     value={readings.date_from}
                     onChange={e =>
                       setReadings(f => ({ ...f, date_from: e.target.value }))
@@ -122,11 +122,11 @@ export default function Export() {
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <FieldLabel>To date</FieldLabel>
                   <input
                     type="date"
-                    className={`${inputClass} w-full`}
+                    className={`${inputClass} w-full min-w-0`}
                     value={readings.date_to}
                     onChange={e =>
                       setReadings(f => ({ ...f, date_to: e.target.value }))
@@ -165,11 +165,11 @@ export default function Export() {
               </ThemedSelect>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+              <div className="min-w-0">
                 <FieldLabel>From date</FieldLabel>
                 <input
                   type="date"
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} w-full min-w-0`}
                   value={alerts.date_from}
                   onChange={e =>
                     setAlerts(f => ({ ...f, date_from: e.target.value }))
@@ -177,11 +177,11 @@ export default function Export() {
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <FieldLabel>To date</FieldLabel>
                 <input
                   type="date"
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} w-full min-w-0`}
                   value={alerts.date_to}
                   onChange={e =>
                     setAlerts(f => ({ ...f, date_to: e.target.value }))
