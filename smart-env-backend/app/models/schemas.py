@@ -154,8 +154,6 @@ class PredictionResponse(BaseModel):
     sensor_id: str
     generated_at: datetime
     forecast: List[PredictionPoint]
-    anomaly_detected: bool
-    anomaly_description: Optional[str] = None
 
 
 # ── Alert Schemas ──────────────────────────────────────────────────────────────

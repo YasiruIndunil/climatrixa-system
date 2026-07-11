@@ -9,7 +9,7 @@ FastAPI + Supabase backend for the IoT Environmental Monitoring and Prediction S
 | Database | Supabase (PostgreSQL) | Data storage + real-time subscriptions |
 | Hosting | Render | Free cloud deployment |
 | IoT Broker | HiveMQ (free tier) | MQTT message broker |
-| AI/ML | scikit-learn + statsmodels | Prediction + anomaly detection |
+| AI/ML | statsmodels | Forecasting |
 
 ## Project Structure
 ```
@@ -30,7 +30,7 @@ smart-env-backend/
 │   │   └── schemas.py       # Pydantic request/response models
 │   ├── services/
 │   │   ├── mqtt_client.py   # HiveMQ subscriber (IoT data ingestion)
-│   │   ├── ai_engine.py     # LSTM / anomaly detection logic
+│   │   ├── ai_engine.py     # Forecasting logic
 │   │   └── alert_service.py # Threshold checks + alert dispatch
 │   └── schemas/             # Supabase table SQL (run once)
 │       └── init.sql

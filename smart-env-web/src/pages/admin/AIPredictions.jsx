@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import {
   BrainCircuit, CheckCircle, RefreshCw, ThermometerSun, Droplets, Wind, Gauge,
-  AlertTriangle, Sparkles, TrendingUp
+  Sparkles, TrendingUp
 } from 'lucide-react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { useTheme } from '../../context/ThemeContext'
@@ -64,11 +64,6 @@ function SensorAIPanel({ sensor, forecast, isTraining, isTrained, onTrain, dark 
         ) : (
           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${dark ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>
             Not trained yet
-          </span>
-        )}
-        {forecast?.anomaly_detected && (
-          <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-            <AlertTriangle size={11}/> Anomaly detected
           </span>
         )}
       </div>

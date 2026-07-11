@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from datetime import datetime, timezone
+import asyncio
 import traceback
 import numpy as np
 from app.models.schemas import PredictionResponse
-from app.services.ai_engine import generate_forecast, detect_anomaly, train_models
+from app.services.ai_engine import generate_forecast, train_models
 from app.services.predictive_alerts import check_predicted_alerts
 from app.core.security import require_admin
 from app.core.database import db
@@ -88,42 +89,18 @@ async def get_prediction(sensor_id: str, hours: int = 24):
     if cached and (now - cached["cached_at"]).total_seconds() < 300:
         return cached["response"]
 
-    forecast = generate_forecast(sensor_id, hours_ahead=min(hours, 48))
-    is_anomaly, anomaly_desc = detect_anomaly(sensor_id)
+    # Run in a thread so the CPU-bound model fitting doesn't block the
+    # shared event loop — other requests (including login) stay responsive
+    # while this sensor's forecast is being computed.
+    forecast = await asyncio.to_thread(generate_forecast, sensor_id, min(hours, 48))
 
     try:
         db.table("predictions").insert({
-            "sensor_id":        sensor_id,
-            "forecast_json":    forecast,
-            "anomaly_detected": is_anomaly,
-            "anomaly_desc":     anomaly_desc,
+            "sensor_id":     sensor_id,
+            "forecast_json": forecast,
         }).execute()
     except Exception:
         pass
-
-    # ── Anomaly → create a real alert event so it shows up like any other alert ──
-    if is_anomaly:
-        try:
-            existing = (
-                db.table("alert_events")
-                .select("id")
-                .eq("sensor_id", sensor_id)
-                .eq("alert_type", "anomaly")
-                .eq("acknowledged", False)
-                .execute()
-            )
-            if not existing.data:
-                latest = db.table("readings").select("temperature").eq("sensor_id", sensor_id).order("recorded_at", desc=True).limit(1).execute()
-                actual = latest.data[0]["temperature"] if latest.data else 0
-                db.table("alert_events").insert({
-                    "sensor_id":       sensor_id,
-                    "alert_type":      "anomaly",
-                    "actual_value":    actual,
-                    "threshold_value": 0,
-                    "message":         anomaly_desc or "Unusual reading pattern detected",
-                }).execute()
-        except Exception as e:
-            print(f"[Anomaly Alert] Error creating alert: {e}")
 
     # ── Predictive alerting — check forecast against rules with trigger_on_predicted ──
     check_predicted_alerts(sensor_id, forecast)
@@ -132,8 +109,6 @@ async def get_prediction(sensor_id: str, hours: int = 24):
         sensor_id=sensor_id,
         generated_at=now,
         forecast=forecast,
-        anomaly_detected=is_anomaly,
-        anomaly_description=anomaly_desc,
     )
     _forecast_cache[cache_key] = {"response": response, "cached_at": now}
     return response

@@ -7,7 +7,6 @@ Device identity resolved via MAC address lookup in sensors table.
 On every incoming reading:
   1. Insert into readings table
   2. check_and_trigger_alerts() — threshold-based alerts (real-time)
-  3. check_and_log_anomaly()    — Isolation Forest anomaly scoring (real-time)
 """
 import json
 import ssl
@@ -16,7 +15,6 @@ import paho.mqtt.client as mqtt
 from app.core.config import get_settings
 from app.core.database import db
 from app.services.alert_service import check_and_trigger_alerts
-from app.services.ai_engine import check_and_log_anomaly
 
 settings = get_settings()
 
@@ -86,14 +84,13 @@ def _on_message(client, userdata, msg):
               f"temp={payload['temperature']}°C "
               f"aqi={payload['aqi']}")
 
-        # ── Step 4: Check alert rules + anomaly (real-time) ──────────
+        # ── Step 4: Check alert rules (real-time) ─────────────────────
         # _on_message is a sync callback — run async checks using the
         # shared event loop from the main FastAPI thread
         global _event_loop
 
         async def _run_checks():
             await check_and_trigger_alerts(sensor_id, reading)
-            await check_and_log_anomaly(sensor_id, reading)
 
         if _event_loop and _event_loop.is_running():
             asyncio.run_coroutine_threadsafe(_run_checks(), _event_loop)

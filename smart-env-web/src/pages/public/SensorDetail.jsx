@@ -217,16 +217,6 @@ export default function SensorDetail() {
       <div className={`${card} mb-6 overflow-hidden`}>
         {forecast && forecast.forecast?.length > 0 ? (
           <div className="p-5">
-            {/* Anomaly banner */}
-            {forecast.anomaly_detected && (
-              <div className="mb-4 px-4 py-3 rounded-xl bg-orange-50 border border-orange-200 flex items-center gap-2">
-                <span className="text-orange-500 text-lg">⚠</span>
-                <div>
-                  <div className="text-sm font-semibold text-orange-700">Anomaly detected in current readings</div>
-                  {forecast.anomaly_description && <div className="text-xs text-orange-600 mt-0.5">{forecast.anomaly_description}</div>}
-                </div>
-              </div>
-            )}
             {/* Next 6 hours summary cards */}
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {PARAMS.map(p => {

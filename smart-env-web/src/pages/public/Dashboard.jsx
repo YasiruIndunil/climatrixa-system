@@ -4,7 +4,7 @@ import { useAuth } from '../../context/useAuth'
 import { useTheme } from '../../context/ThemeContext'
 import { useAlertWS } from '../../components/Toast'
 import api from '../../utils/api'
-import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge, TrendingUp, Sparkles, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Radio, Bell, BellOff, Activity, ThermometerSun, Droplets, Wind, Gauge, TrendingUp, Sparkles, ChevronRight } from 'lucide-react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { LoadingSpinner } from '../../components/PageWrapper'
 
@@ -224,11 +224,6 @@ function ForecastChartCard({ sensorName, forecast, dark }) {
             <div className={`text-xs ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Next 24 hours</div>
           </div>
         </div>
-        {forecast.anomaly_detected && (
-          <span className="flex items-center gap-1 text-xs font-semibold text-orange-500 bg-orange-50 px-2 py-1 rounded-full">
-            <AlertTriangle size={11}/> Anomaly
-          </span>
-        )}
       </div>
 
       {/* Param tabs */}
