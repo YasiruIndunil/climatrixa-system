@@ -3,31 +3,46 @@ AI Engine Service — Climatrixa
 ───────────────────────────────
 Models:
   1. statsmodels ExponentialSmoothing — 24h forecast for temperature, humidity, AQI, pressure
+  2. IsolationForest — anomaly detection on recent readings
 
 Model persistence:
   - Training series saved to Supabase Storage bucket "ai-models"
-  - Fitted models are cached in-memory per sensor+param (see _model_cache) so
-    forecast requests don't refit from scratch every time. Cache is cleared
-    whenever a sensor is retrained, and safety-net-expires after
-    _MODEL_CACHE_TTL in case retrain isn't triggered for a long time.
+  - Refitted on each forecast request (avoids pickle compatibility issues)
   - Retrain via POST /ai/train/{sensor_id}
 """
 import io
+import asyncio
 import joblib
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from datetime import datetime, timezone
+from sklearn.ensemble import IsolationForest
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 from app.core.database import db
 
-# In-memory fitted-model cache: f"{sensor_id}:{param}" -> (model, series, cached_at)
+# In-memory model cache — cleared before each forecast to avoid stale data
 _model_cache: dict = {}
-_MODEL_CACHE_TTL = 3600  # seconds — safety net; cache is also cleared on retrain
 
 BUCKET = "ai-models"
 
 
 # ── Supabase Storage helpers ──────────────────────────────────────────────────
+
+def _upload_model(model, filename: str):
+    buf = io.BytesIO()
+    joblib.dump(model, buf)
+    buf.seek(0)
+    try:
+        db.storage.from_(BUCKET).remove([filename])
+    except Exception:
+        pass
+    db.storage.from_(BUCKET).upload(
+        path=filename,
+        file=buf.getvalue(),
+        file_options={"content-type": "application/octet-stream"}
+    )
+
 
 def _upload_series(series: pd.Series, filename: str):
     buf = io.BytesIO()
@@ -138,6 +153,12 @@ def train_models(sensor_id: str) -> dict:
         except Exception as e:
             print(f"[AI] Error saving {param}: {e}")
 
+    # Train Isolation Forest anomaly detector
+    features = df[["temperature", "humidity", "aqi", "pressure"]].dropna().values
+    iso = IsolationForest(n_estimators=200, contamination=0.03, random_state=42, n_jobs=-1)
+    iso.fit(features)
+    _upload_model(iso, f"anomaly_{sensor_id}.pkl")
+    trained.append("anomaly_detector")
     print(f"[AI] Training complete: {trained}")
 
     return {
@@ -150,122 +171,6 @@ def train_models(sensor_id: str) -> dict:
 
 # ── Forecasting ───────────────────────────────────────────────────────────────
 
-def _get_fitted_model(sensor_id: str, param: str):
-    """
-    Return a cached (model, series) pair for this sensor+param, fitting and
-    caching it only if there's no fresh entry. A seasonal Holt-Winters fit
-    over ~1000 points is the expensive part of a forecast request — reusing
-    it across requests is what makes repeat forecasts fast. The cache is
-    invalidated by _clear_cache() whenever the sensor is retrained (so it
-    never serves stale-shaped forecasts), with _MODEL_CACHE_TTL as a safety
-    net in case retrain doesn't run for a long time.
-    """
-    key = f"{sensor_id}:{param}"
-    now = datetime.now(timezone.utc).timestamp()
-    cached = _model_cache.get(key)
-    if cached and (now - cached[2]) < _MODEL_CACHE_TTL:
-        return cached[0], cached[1]
-
-    series = _download_fresh(f"forecast_{sensor_id}_{param}.pkl")
-
-    # 10-min resolution → 144 points = 1 day. Need at least 2 full
-    # days of data for seasonal fitting to be meaningful/stable.
-    seasonal_periods = 144
-    use_seasonal = len(series) >= seasonal_periods * 2
-
-    model = None
-    if use_seasonal:
-        try:
-            model = ExponentialSmoothing(
-                series,
-                trend="add",
-                seasonal="add",
-                seasonal_periods=seasonal_periods,
-                initialization_method="estimated",
-            ).fit(optimized=True)
-            # Sanity check — if the fitted model immediately produces
-            # NaN forecasts, treat it as a failed fit and fall back
-            test_pred = model.forecast(6)
-            if np.isnan(test_pred.values).any():
-                model = None
-        except Exception as e:
-            print(f"[AI] Seasonal fit failed for {param}, falling back to trend-only: {e}")
-            model = None
-
-    if model is None:
-        # Trend-only fallback — always succeeds, just less accurate
-        model = ExponentialSmoothing(
-            series,
-            trend="add",
-            seasonal=None,
-            initialization_method="estimated",
-        ).fit(optimized=True)
-
-    _model_cache[key] = (model, series, now)
-    return model, series
-
-
-def _forecast_one_param(sensor_id: str, param: str, live_df: pd.DataFrame, hours_ahead: int) -> dict:
-    result = {}
-    try:
-        model, series = _get_fitted_model(sensor_id, param)
-
-        steps = hours_ahead * 6
-        pred = model.forecast(steps)
-        pred_values = pred.values
-
-        # ── Bias correction: anchor to the ACTUAL live latest reading ──
-        # ExponentialSmoothing's own extrapolated starting point can lag
-        # behind reality, AND the training series itself is a snapshot
-        # from whenever the model was last trained (readings keep
-        # arriving via MQTT every ~30s after that). We shift the whole
-        # forecast curve to start from the live value, while preserving
-        # the trend/seasonal SHAPE the model learned. This runs fresh on
-        # every request regardless of model caching, so accuracy is
-        # unaffected by reusing the cached fit.
-        if not live_df.empty and param in live_df.columns and live_df[param].notna().any():
-            latest_actual = float(live_df[param].iloc[-1])
-        else:
-            latest_actual = float(series.iloc[-1])
-        model_start = float(pred_values[0])
-        bias = latest_actual - model_start
-        pred_values = pred_values + bias
-
-        for h in range(1, hours_ahead + 1):
-            hour_preds = pred_values[(h - 1) * 6: h * 6]
-            mean_val = float(np.mean(hour_preds))
-            if np.isnan(mean_val):
-                raise ValueError(f"NaN in forecast for {param}")
-            val = round(mean_val, 1)
-            if param == "temperature":   val = max(0, min(60, val))
-            elif param == "humidity":    val = max(0, min(100, val))
-            elif param == "aqi":         val = max(0, min(1500, val))
-            elif param == "pressure":    val = max(900, min(1100, val))
-            result[h] = val
-
-    except Exception as e:
-        print(f"[AI] Forecast fallback for {param}: {e}")
-        # Linear trend fallback
-        df = _get_recent_readings(sensor_id, n=72)
-        if not df.empty and param in df.columns and df[param].notna().sum() > 5:
-            x = np.arange(len(df))
-            y = df[param].ffill().values
-            coeffs = np.polyfit(x, y, deg=1)
-            future_x = np.arange(len(df), len(df) + hours_ahead)
-            predicted = np.polyval(coeffs, future_x)
-            for h, val in enumerate(predicted, 1):
-                val = round(float(val), 1)
-                if param == "pressure": val = max(900, min(1100, val))
-                result[h] = val
-        else:
-            df2 = _get_recent_readings(sensor_id, n=20)
-            default = round(float(df2[param].mean()), 1) if not df2.empty and param in df2.columns else 0.0
-            for h in range(1, hours_ahead + 1):
-                result[h] = default
-
-    return result
-
-
 def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
     forecast_rows = {h: {"hours_ahead": h, "temperature": None, "humidity": None, "aqi": None, "pressure": None} for h in range(1, hours_ahead + 1)}
 
@@ -274,16 +179,273 @@ def generate_forecast(sensor_id: str, hours_ahead: int = 24) -> list[dict]:
     # the model's own possibly-lagged extrapolation or a stale training snapshot
     live_df = _get_recent_readings(sensor_id, n=1)
 
-    params = ["temperature", "humidity", "aqi", "pressure"]
+    for param in ["temperature", "humidity", "aqi", "pressure"]:
+        filename = f"forecast_{sensor_id}_{param}.pkl"
+        try:
+            # Always download fresh — never use stale in-memory cache
+            series = _download_fresh(filename)
 
-    # Sequential on purpose: Render's shared vCPU gives no real benefit from
-    # threading 4 CPU-bound statsmodels fits, and concurrent threads hammering
-    # the single Supabase client here previously caused requests to hang
-    # indefinitely instead of just being slow. The fitted-model cache in
-    # _get_fitted_model is what actually makes repeat requests fast — a warm
-    # request only pays for 4 cheap .forecast() calls either way.
-    for param in params:
-        for h, val in _forecast_one_param(sensor_id, param, live_df, hours_ahead).items():
-            forecast_rows[h][param] = val
+            # 10-min resolution → 144 points = 1 day. Need at least 2 full
+            # days of data for seasonal fitting to be meaningful/stable.
+            seasonal_periods = 144
+            use_seasonal = len(series) >= seasonal_periods * 2
+
+            model = None
+            if use_seasonal:
+                try:
+                    model = ExponentialSmoothing(
+                        series,
+                        trend="add",
+                        seasonal="add",
+                        seasonal_periods=seasonal_periods,
+                        initialization_method="estimated",
+                    ).fit(optimized=True)
+                    # Sanity check — if the fitted model immediately produces
+                    # NaN forecasts, treat it as a failed fit and fall back
+                    test_pred = model.forecast(6)
+                    if np.isnan(test_pred.values).any():
+                        model = None
+                except Exception as e:
+                    print(f"[AI] Seasonal fit failed for {param}, falling back to trend-only: {e}")
+                    model = None
+
+            if model is None:
+                # Trend-only fallback — always succeeds, just less accurate
+                model = ExponentialSmoothing(
+                    series,
+                    trend="add",
+                    seasonal=None,
+                    initialization_method="estimated",
+                ).fit(optimized=True)
+
+            steps = hours_ahead * 6
+            pred = model.forecast(steps)
+            pred_values = pred.values
+
+            # ── Bias correction: anchor to the ACTUAL live latest reading ──
+            # ExponentialSmoothing's own extrapolated starting point can lag
+            # behind reality, AND the training series itself is a snapshot
+            # from whenever the model was last trained (readings keep
+            # arriving via MQTT every ~30s after that). We shift the whole
+            # forecast curve to start from the live value, while preserving
+            # the trend/seasonal SHAPE the model learned.
+            if not live_df.empty and param in live_df.columns and live_df[param].notna().any():
+                latest_actual = float(live_df[param].iloc[-1])
+            else:
+                latest_actual = float(series.iloc[-1])
+            model_start = float(pred_values[0])
+            bias = latest_actual - model_start
+            pred_values = pred_values + bias
+
+            for h in range(1, hours_ahead + 1):
+                hour_preds = pred_values[(h - 1) * 6: h * 6]
+                mean_val = float(np.mean(hour_preds))
+                if np.isnan(mean_val):
+                    raise ValueError(f"NaN in forecast for {param}")
+                val = round(mean_val, 1)
+                if param == "temperature":   val = max(0, min(60, val))
+                elif param == "humidity":    val = max(0, min(100, val))
+                elif param == "aqi":         val = max(0, min(1500, val))
+                elif param == "pressure":    val = max(900, min(1100, val))
+                forecast_rows[h][param] = val
+
+        except Exception as e:
+            print(f"[AI] Forecast fallback for {param}: {e}")
+            # Linear trend fallback
+            df = _get_recent_readings(sensor_id, n=72)
+            if not df.empty and param in df.columns and df[param].notna().sum() > 5:
+                x = np.arange(len(df))
+                y = df[param].ffill().values
+                coeffs = np.polyfit(x, y, deg=1)
+                future_x = np.arange(len(df), len(df) + hours_ahead)
+                predicted = np.polyval(coeffs, future_x)
+                for h, val in enumerate(predicted, 1):
+                    val = round(float(val), 1)
+                    if param == "pressure": val = max(900, min(1100, val))
+                    forecast_rows[h][param] = val
+            else:
+                df2 = _get_recent_readings(sensor_id, n=20)
+                default = round(float(df2[param].mean()), 1) if not df2.empty and param in df2.columns else 0.0
+                for h in range(1, hours_ahead + 1):
+                    forecast_rows[h][param] = default
 
     return [forecast_rows[h] for h in sorted(forecast_rows.keys())]
+
+
+# ── Anomaly detection ─────────────────────────────────────────────────────────
+
+def detect_anomaly(sensor_id: str) -> tuple[bool, Optional[str]]:
+    df = _get_recent_readings(sensor_id, n=100)
+
+    if len(df) < 5:
+        return False, None
+
+    try:
+        model = _download_fresh(f"anomaly_{sensor_id}.pkl")
+        latest = df[["temperature", "humidity", "aqi", "pressure"]].iloc[-1].values.reshape(1, -1)
+        prediction = model.predict(latest)
+        is_anomaly = prediction[0] == -1
+    except Exception:
+        if len(df) < 20:
+            return False, None
+        features = df[["temperature", "humidity", "aqi", "pressure"]].values
+        model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+        model.fit(features[:-5])
+        latest = features[-1].reshape(1, -1)
+        is_anomaly = model.predict(latest)[0] == -1
+
+    if is_anomaly:
+        last_row = df.iloc[-1]
+        mean = df[["temperature", "humidity", "aqi", "pressure"]].mean()
+        desc_parts = []
+        if abs(last_row["temperature"] - mean["temperature"]) > 5:
+            desc_parts.append(f"Temperature {last_row['temperature']:.1f}°C vs avg {mean['temperature']:.1f}°C")
+        if abs(last_row["humidity"] - mean["humidity"]) > 10:
+            desc_parts.append(f"Humidity {last_row['humidity']:.1f}% vs avg {mean['humidity']:.1f}%")
+        if abs(last_row["aqi"] - mean["aqi"]) > 20:
+            desc_parts.append(f"AQI {last_row['aqi']:.1f} vs avg {mean['aqi']:.1f}")
+        if abs(last_row["pressure"] - mean["pressure"]) > 5:
+            desc_parts.append(f"Pressure {last_row['pressure']:.1f} hPa vs avg {mean['pressure']:.1f} hPa")
+        desc = "; ".join(desc_parts) if desc_parts else "Unusual reading pattern detected"
+        return True, desc
+
+    return False, None
+
+
+# ── Real-time anomaly detection (called on every MQTT reading) ────────────────
+
+_anomaly_model_cache: dict = {}   # sensor_id -> (model, cached_at)
+_ANOMALY_CACHE_TTL = 600          # 10 minutes — model only changes on retrain
+
+
+def _get_cached_anomaly_model(sensor_id: str):
+    """
+    Load the Isolation Forest model with a short in-memory cache.
+    Real-time checks run every ~30s per sensor — re-downloading from
+    Supabase Storage on every single reading would be wasteful and slow.
+    The model itself only changes on weekly/monthly retrain, so a
+    10-minute cache is safe and keeps ingestion fast.
+    """
+    now = datetime.now(timezone.utc).timestamp()
+    cached = _anomaly_model_cache.get(sensor_id)
+    if cached and (now - cached[1]) < _ANOMALY_CACHE_TTL:
+        return cached[0]
+
+    model = _download_fresh(f"anomaly_{sensor_id}.pkl")
+    _anomaly_model_cache[sensor_id] = (model, now)
+    return model
+
+
+def check_reading_anomaly(sensor_id: str, reading: dict) -> tuple[bool, Optional[str]]:
+    """
+    Score a SINGLE incoming reading against the cached Isolation Forest
+    model. Called from the MQTT ingestion pipeline on every reading,
+    alongside check_and_trigger_alerts, so anomalies are caught within
+    seconds instead of only when someone opens the forecast page.
+    """
+    try:
+        model = _get_cached_anomaly_model(sensor_id)
+    except Exception:
+        # No trained model yet for this sensor — skip silently
+        return False, None
+
+    try:
+        features = [[
+            reading.get("temperature") or 0,
+            reading.get("humidity") or 0,
+            reading.get("aqi") or 0,
+            reading.get("pressure") or 0,
+        ]]
+        prediction = model.predict(features)
+        is_anomaly = prediction[0] == -1
+    except Exception as e:
+        print(f"[AI] Anomaly scoring failed for {sensor_id}: {e}")
+        return False, None
+
+    if not is_anomaly:
+        return False, None
+
+    # Build description by comparing against recent baseline
+    df = _get_recent_readings(sensor_id, n=50)
+    desc = "Unusual reading pattern detected"
+    if not df.empty:
+        mean = df[["temperature", "humidity", "aqi", "pressure"]].mean()
+        parts = []
+        if reading.get("temperature") is not None and abs(reading["temperature"] - mean["temperature"]) > 5:
+            parts.append(f"Temperature {reading['temperature']:.1f}°C vs avg {mean['temperature']:.1f}°C")
+        if reading.get("humidity") is not None and abs(reading["humidity"] - mean["humidity"]) > 10:
+            parts.append(f"Humidity {reading['humidity']:.1f}% vs avg {mean['humidity']:.1f}%")
+        if reading.get("aqi") is not None and abs(reading["aqi"] - mean["aqi"]) > 20:
+            parts.append(f"AQI {reading['aqi']:.1f} vs avg {mean['aqi']:.1f}")
+        if reading.get("pressure") is not None and abs(reading["pressure"] - mean["pressure"]) > 5:
+            parts.append(f"Pressure {reading['pressure']:.1f} hPa vs avg {mean['pressure']:.1f} hPa")
+        if parts:
+            desc = "; ".join(parts)
+
+    return True, desc
+
+
+_last_anomaly_check: dict = {}   # sensor_id -> timestamp
+_ANOMALY_CHECK_INTERVAL = 60      # seconds — don't re-check every single reading
+
+
+async def check_and_log_anomaly(sensor_id: str, reading: dict):
+    """
+    Score the reading and, if anomalous, create an alert_event —
+    deduped so only one active anomaly alert exists per sensor at a time.
+    Call this from the MQTT handler right after check_and_trigger_alerts.
+
+    Throttled to once per minute per sensor, and all blocking Supabase
+    calls run in a background thread — anomaly scoring must NEVER block
+    the shared FastAPI event loop, since that loop also serves every
+    other API and WebSocket request. Without this, a burst of MQTT
+    readings (which can arrive every 1-2 seconds) would queue up
+    blocking calls and stall the entire app.
+    """
+    now = datetime.now(timezone.utc).timestamp()
+    last = _last_anomaly_check.get(sensor_id, 0)
+    if (now - last) < _ANOMALY_CHECK_INTERVAL:
+        return  # Checked recently — skip to avoid overloading the event loop
+    _last_anomaly_check[sensor_id] = now
+
+    def _blocking_work():
+        is_anomaly, desc = check_reading_anomaly(sensor_id, reading)
+        if not is_anomaly:
+            return None
+
+        try:
+            existing = (
+                db.table("alert_events")
+                .select("id")
+                .eq("sensor_id", sensor_id)
+                .eq("alert_type", "anomaly")
+                .eq("acknowledged", False)
+                .execute()
+            )
+            if existing.data:
+                return None  # Already have an unacknowledged anomaly alert
+
+            db.table("alert_events").insert({
+                "sensor_id":       sensor_id,
+                "alert_type":      "anomaly",
+                "actual_value":    reading.get("temperature") or 0,
+                "threshold_value": 0,
+                "message":         desc,
+                "is_predicted":    False,
+            }).execute()
+            print(f"[AI] Anomaly logged for sensor {sensor_id}: {desc}")
+            return desc
+        except Exception as e:
+            print(f"[AI] Failed to log anomaly for {sensor_id}: {e}")
+            return None
+
+    # Run all the blocking Supabase Storage/DB calls in a thread pool —
+    # this frees the event loop to keep serving other requests immediately
+    desc = await asyncio.to_thread(_blocking_work)
+
+    if desc:
+        try:
+            from app.core.ws_manager import manager
+            await manager.broadcast({"event": "alert_triggered", "data": {"sensor_id": sensor_id, "message": desc}})
+        except Exception:
+            pass
