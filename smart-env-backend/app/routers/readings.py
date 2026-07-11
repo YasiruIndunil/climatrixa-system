@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from app.models.schemas import ReadingCreate, ReadingResponse, LatestReadingsResponse
 from app.core.database import db
-from app.core.security import require_admin
+from app.core.security import require_admin, get_current_user
 from app.services.alert_service import check_and_trigger_alerts
 from app.core.timezone import utc_to_slst, format_slst
 from fastapi.responses import StreamingResponse, Response
@@ -134,14 +134,31 @@ async def export_readings(
     from_: Optional[str] = Query(None, alias="from"),
     to: Optional[str] = None,
     format: str = "csv",
-    admin: dict = Depends(require_admin)
+    current_user: dict = Depends(get_current_user)
 ):
+    allowed_sensor_ids = None
+    if current_user.get("role") != "admin":
+        access = (
+            db.table("user_sensor_access")
+            .select("sensor_id")
+            .eq("user_id", current_user.get("sub"))
+            .execute()
+        )
+        allowed_sensor_ids = [row["sensor_id"] for row in (access.data or [])]
+        if sensor_id and sensor_id not in allowed_sensor_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this sensor"
+            )
+
     def build_query():
         """Build a fresh query with filters — must rebuild each page since
         the Supabase client can't safely reuse a builder after execute()."""
         q = db.table("readings").select("*")
         if sensor_id:
             q = q.eq("sensor_id", sensor_id)
+        elif allowed_sensor_ids is not None:
+            q = q.in_("sensor_id", allowed_sensor_ids)
         if from_:
             q = q.gte("recorded_at", _slst_to_utc(from_, end_of_day=False))
         if to:
@@ -150,21 +167,22 @@ async def export_readings(
 
     # Paginate to fetch all records beyond Supabase's 1000 default limit
     all_rows = []
-    page = 0
-    page_size = 1000
-    while True:
-        result = (
-            build_query()
-            .order("recorded_at", desc=True)
-            .range(page * page_size, (page + 1) * page_size - 1)
-            .execute()
-        )
-        if not result.data:
-            break
-        all_rows.extend(result.data)
-        if len(result.data) < page_size:
-            break
-        page += 1
+    if allowed_sensor_ids is None or allowed_sensor_ids or sensor_id:
+        page = 0
+        page_size = 1000
+        while True:
+            result = (
+                build_query()
+                .order("recorded_at", desc=True)
+                .range(page * page_size, (page + 1) * page_size - 1)
+                .execute()
+            )
+            if not result.data:
+                break
+            all_rows.extend(result.data)
+            if len(result.data) < page_size:
+                break
+            page += 1
     rows = all_rows
 
     # Fetch sensor info map
