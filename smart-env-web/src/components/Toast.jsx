@@ -3,13 +3,16 @@ import { CheckCircle, XCircle, X, Bell, AlertTriangle } from 'lucide-react'
 
 // ── Toast Context ─────────────────────────────────────────────────
 const ToastContext = createContext(null)
+const ToastRemoveContext = createContext(null)
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
-  const addToast = useCallback((message, type = 'success') => {
+  // refId lets a toast be tied to a specific alert event (see removeByRef)
+  // so it can be dismissed early if that event gets acknowledged elsewhere.
+  const addToast = useCallback((message, type = 'success', refId = null) => {
     const id = Date.now()
-    setToasts(t => [...t, { id, message, type }])
+    setToasts(t => [...t, { id, message, type, refId }])
     setTimeout(() => {
       setToasts(t => t.filter(toast => toast.id !== id))
     }, 4000)
@@ -17,8 +20,13 @@ export function ToastProvider({ children }) {
 
   const remove = (id) => setToasts(t => t.filter(toast => toast.id !== id))
 
+  const removeByRef = useCallback((refId) => {
+    setToasts(t => t.filter(toast => toast.refId !== refId))
+  }, [])
+
   return (
     <ToastContext.Provider value={addToast}>
+    <ToastRemoveContext.Provider value={removeByRef}>
       {children}
       {/* Toast container */}
       <div className="fixed bottom-4 right-4 z-[200] space-y-2 pointer-events-none">
@@ -40,11 +48,13 @@ export function ToastProvider({ children }) {
           </div>
         ))}
       </div>
+    </ToastRemoveContext.Provider>
     </ToastContext.Provider>
   )
 }
 
 export const useToast = () => useContext(ToastContext)
+export const useRemoveToast = () => useContext(ToastRemoveContext)
 
 // ── WebSocket Alert Context ───────────────────────────────────────
 const AlertWSContext = createContext(null)
@@ -53,6 +63,7 @@ const WS_URL = 'wss://climatrixa-system-api.onrender.com/readings/ws/live'
 
 export function AlertWSProvider({ children }) {
   const toast = useToast()
+  const removeToastByRef = useRemoveToast()
   const wsRef = useRef(null)
   const [connected, setConnected] = useState(false)
   const [latestAlert, setLatestAlert] = useState(null)
@@ -84,8 +95,9 @@ export function AlertWSProvider({ children }) {
             const alert = msg.data
             setLatestAlert(alert)
 
-            // Show toast notification
-            toast(`⚠ Alert: ${alert.message}`, 'alert')
+            // Show toast notification, tagged with the alert id so it can
+            // be closed early if someone else acknowledges it first.
+            toast(`⚠ Alert: ${alert.message}`, 'alert', alert.id)
 
             // Show browser notification if permitted
             if (Notification.permission === 'granted') {
@@ -99,6 +111,8 @@ export function AlertWSProvider({ children }) {
 
           if (msg.event === 'alert_acknowledged') {
             setLatestAcknowledged(msg.data)
+            // Close this alert's toast if it's still showing on this screen.
+            removeToastByRef?.(msg.data.id)
           }
         } catch {}
       }
@@ -115,7 +129,7 @@ export function AlertWSProvider({ children }) {
     } catch (err) {
       console.error('[WS] Error:', err)
     }
-  }, [toast])
+  }, [toast, removeToastByRef])
 
   useEffect(() => {
     connect()
