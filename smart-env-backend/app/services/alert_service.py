@@ -5,13 +5,8 @@ Called every time a new reading is stored.
 Checks the reading against all active alert rules for that sensor.
 If a threshold is exceeded, logs an alert_event to Supabase.
 """
-from datetime import datetime, timedelta, timezone
 from app.core.database import db
 from app.core.ws_manager import manager
-
-# How long an unacknowledged alert blocks re-firing before it's treated as
-# "still open, remind everyone again" rather than a duplicate.
-REALERT_COOLDOWN = timedelta(minutes=1)
 
 # What field of the reading does each alert_type check?
 ALERT_FIELD_MAP = {
@@ -74,13 +69,9 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
         print(f"[Alert] Rule: {alert_type} threshold={threshold} actual={actual} triggered={triggered}")
 
         if triggered:
-            # Re-trigger if the last ACTUAL alert was acknowledged, OR it's
-            # still unacknowledged but older than REALERT_COOLDOWN — the
-            # condition is still breached, so remind everyone again instead
-            # of staying silent forever until someone clicks Acknowledge.
+            # Only re-trigger if last ACTUAL alert was acknowledged
             # (is_predicted=False filter prevents an unacknowledged AI-predicted
             #  alert from silently blocking a real actual-reading alert)
-            cooldown_cutoff = (datetime.now(timezone.utc) - REALERT_COOLDOWN).isoformat()
             recent_unacknowledged = (
                 db.table("alert_events")
                 .select("id")
@@ -88,11 +79,10 @@ async def check_and_trigger_alerts(sensor_id: str, reading: dict):
                 .eq("alert_type", alert_type)
                 .eq("acknowledged", False)
                 .eq("is_predicted", False)
-                .gte("triggered_at", cooldown_cutoff)
                 .execute()
             )
             if recent_unacknowledged.data:
-                print(f"[Alert] Skipping — unacknowledged alert already exists within cooldown")
+                print(f"[Alert] Skipping — unacknowledged alert already exists")
                 continue
 
             # Build message
