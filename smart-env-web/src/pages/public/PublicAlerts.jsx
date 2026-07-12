@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../context/useAuth'
 import { useTheme } from '../../context/ThemeContext'
-import { useToast, useAlertWS } from '../../components/Toast'
+import { useToast } from '../../components/Toast'
 import api from '../../utils/api'
 import { Bell, CheckCheck, Clock, MapPin, AlertTriangle, X } from 'lucide-react'
 
@@ -29,18 +29,8 @@ export default function PublicAlerts() {
   const { dark } = useTheme()
   const toast = useToast()
   const queryClient = useQueryClient()
-  const { latestAcknowledged } = useAlertWS() || {}
   const [showAcknowledged, setShowAcknowledged] = useState(false)
   const [search, setSearch] = useState('')
-
-  // Another user (sharing this sensor) acknowledged an alert — reflect it live
-  // instead of leaving it showing as active until the next poll.
-  useEffect(() => {
-    if (!latestAcknowledged) return
-    queryClient.setQueryData(['public-alert-events'], old =>
-      old?.map(e => e.id === latestAcknowledged.id ? { ...e, ...latestAcknowledged } : e)
-    )
-  }, [latestAcknowledged, queryClient])
 
   const { data: mySensors } = useQuery({
     queryKey: ['my-sensors', user?.id],

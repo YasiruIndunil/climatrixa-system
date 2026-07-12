@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Bell, AlertTriangle, Search, X, CheckCheck, Clock, MapPin } from 'lucide-react'
-import { useToast, useAlertWS } from '../../components/Toast'
+import { useToast } from '../../components/Toast'
 import { useTheme } from '../../context/ThemeContext'
 import api from '../../utils/api'
 
@@ -300,7 +300,6 @@ export default function Alerts() {
   const { dark } = useTheme()
   const queryClient = useQueryClient()
   const toast = useToast()
-  const { latestAcknowledged } = useAlertWS() || {}
   const [modalOpen, setModalOpen] = useState(false)
   const [ruleSearch, setRuleSearch] = useState('')
   const [ruleSensorFilter, setRuleSensorFilter] = useState('all')
@@ -323,15 +322,6 @@ export default function Alerts() {
     queryFn: () => api.get('/alerts/events').then(r => r.data),
     refetchInterval: 15000,
   })
-
-  // Another connected client acknowledged an alert — reflect it live instead
-  // of leaving it showing as active until the next poll.
-  useEffect(() => {
-    if (!latestAcknowledged) return
-    queryClient.setQueryData(['alert-events'], old =>
-      old?.map(e => e.id === latestAcknowledged.id ? { ...e, ...latestAcknowledged } : e)
-    )
-  }, [latestAcknowledged, queryClient])
 
   const deleteRule = async id => {
     if (!confirm('Delete this alert rule?')) return

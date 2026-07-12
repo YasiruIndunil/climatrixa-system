@@ -56,7 +56,6 @@ export function AlertWSProvider({ children }) {
   const wsRef = useRef(null)
   const [connected, setConnected] = useState(false)
   const [latestAlert, setLatestAlert] = useState(null)
-  const [latestAcknowledged, setLatestAcknowledged] = useState(null)
   const reconnectRef = useRef(null)
 
   const connect = useCallback(() => {
@@ -96,10 +95,6 @@ export function AlertWSProvider({ children }) {
               })
             }
           }
-
-          if (msg.event === 'alert_acknowledged') {
-            setLatestAcknowledged(msg.data)
-          }
         } catch {}
       }
 
@@ -126,7 +121,7 @@ export function AlertWSProvider({ children }) {
   }, [connect])
 
   return (
-    <AlertWSContext.Provider value={{ connected, latestAlert, latestAcknowledged }}>
+    <AlertWSContext.Provider value={{ connected, latestAlert }}>
       {children}
     </AlertWSContext.Provider>
   )
