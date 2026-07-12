@@ -8,6 +8,7 @@ from app.models.schemas import AlertRuleCreate, AlertRuleResponse, AlertEventRes
 from app.core.security import require_admin, get_current_user
 from app.core.database import db
 from app.core.timezone import format_slst
+from app.core.ws_manager import manager
 from app.services.alert_service import get_alert_events
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
@@ -100,6 +101,17 @@ async def acknowledge_alert(event_id: str, current_user: dict = Depends(get_curr
     }).eq("id", event_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Alert event not found")
+
+    # Let every other connected client (e.g. another user sharing this sensor)
+    # know this alert is already handled, so their UI doesn't show it as active.
+    try:
+        await manager.broadcast({
+            "event": "alert_acknowledged",
+            "data": result.data[0]
+        })
+    except Exception as e:
+        print(f"[Alert] Acknowledge broadcast failed: {e}")
+
     return result.data[0]
 
 
