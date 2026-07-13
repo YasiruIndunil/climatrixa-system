@@ -5,11 +5,20 @@ Models:
   1. statsmodels ExponentialSmoothing — 24h forecast for temperature, humidity, AQI, pressure
 
 Model persistence:
-  - Training series saved to Supabase Storage bucket "ai-models"
-  - Fitted models are cached in-memory per sensor+param (see _model_cache) so
-    forecast requests don't refit from scratch every time. Cache is cleared
-    whenever a sensor is retrained, and safety-net-expires after
-    _MODEL_CACHE_TTL in case retrain isn't triggered for a long time.
+  - train_models() fits each param's Holt-Winters model ONCE (in the
+    background — via POST /ai/train/{sensor_id} or the weekly/monthly
+    scheduler) and uploads the FITTED model to Supabase Storage bucket
+    "ai-models", alongside the raw training series as a fallback.
+  - generate_forecast() just downloads the pre-fitted model and calls the
+    cheap .forecast() — no optimization on the request path. This matters
+    because the in-memory cache (_model_cache) only survives for the life
+    of the running process: on Render, every deploy and every free-tier
+    spin-down after idle resets it, so "first login after a restart" would
+    otherwise still pay the full seasonal-fit cost synchronously.
+  - If a pre-fitted model is missing (sensor trained before this existed)
+    or fails to unpickle (e.g. a statsmodels version bump across deploys),
+    _get_fitted_model() falls back to refitting live from the raw series —
+    slower, but self-healing.
   - Retrain via POST /ai/train/{sensor_id}
 """
 import io
@@ -20,7 +29,7 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from datetime import datetime, timezone
 from app.core.database import db
 
-# In-memory fitted-model cache: f"{sensor_id}:{param}" -> (model, series, cached_at)
+# In-memory fitted-model cache: f"{sensor_id}:{param}" -> (model, last_value, cached_at)
 _model_cache: dict = {}
 _MODEL_CACHE_TTL = 3600  # seconds — safety net; cache is also cleared on retrain
 
@@ -29,9 +38,9 @@ BUCKET = "ai-models"
 
 # ── Supabase Storage helpers ──────────────────────────────────────────────────
 
-def _upload_series(series: pd.Series, filename: str):
+def _upload_pickle(obj, filename: str):
     buf = io.BytesIO()
-    joblib.dump(series, buf)
+    joblib.dump(obj, buf)
     buf.seek(0)
     try:
         db.storage.from_(BUCKET).remove([filename])
@@ -54,6 +63,49 @@ def _clear_cache(sensor_id: str):
     for key in list(_model_cache.keys()):
         if sensor_id in key:
             del _model_cache[key]
+
+
+def _fit_series(series: pd.Series):
+    """
+    Fit a Holt-Winters model on a training series — seasonal first, falling
+    back to trend-only if seasonal fitting fails or produces NaN forecasts.
+    This is the CPU-heavy part; call it during training (background), not
+    on the forecast request path.
+    """
+    # 10-min resolution → 144 points = 1 day. Need at least 2 full
+    # days of data for seasonal fitting to be meaningful/stable.
+    seasonal_periods = 144
+    use_seasonal = len(series) >= seasonal_periods * 2
+
+    model = None
+    if use_seasonal:
+        try:
+            model = ExponentialSmoothing(
+                series,
+                trend="add",
+                seasonal="add",
+                seasonal_periods=seasonal_periods,
+                initialization_method="estimated",
+            ).fit(optimized=True)
+            # Sanity check — if the fitted model immediately produces
+            # NaN forecasts, treat it as a failed fit and fall back
+            test_pred = model.forecast(6)
+            if np.isnan(test_pred.values).any():
+                model = None
+        except Exception as e:
+            print(f"[AI] Seasonal fit failed, falling back to trend-only: {e}")
+            model = None
+
+    if model is None:
+        # Trend-only fallback — always succeeds, just less accurate
+        model = ExponentialSmoothing(
+            series,
+            trend="add",
+            seasonal=None,
+            initialization_method="estimated",
+        ).fit(optimized=True)
+
+    return model
 
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -132,11 +184,22 @@ def train_models(sensor_id: str) -> dict:
             continue
         series = df[param].dropna()
         try:
-            _upload_series(series, f"forecast_{sensor_id}_{param}.pkl")
-            trained.append(f"forecast_{param}")
+            _upload_pickle(series, f"forecast_{sensor_id}_{param}.pkl")
             print(f"[AI] Saved training data for {param} ({len(series)} points)")
         except Exception as e:
-            print(f"[AI] Error saving {param}: {e}")
+            print(f"[AI] Error saving series for {param}: {e}")
+            continue
+
+        try:
+            # Fit once here (background/training path — CPU cost is fine)
+            # and upload the fitted model so forecast requests never need
+            # to re-optimize on the request path, even on a cold process.
+            model = _fit_series(series)
+            _upload_pickle((model, float(series.iloc[-1])), f"forecast_model_{sensor_id}_{param}.pkl")
+            trained.append(f"forecast_{param}")
+            print(f"[AI] Fitted and saved model for {param}")
+        except Exception as e:
+            print(f"[AI] Error fitting/saving model for {param}: {e}")
 
     print(f"[AI] Training complete: {trained}")
 
@@ -152,13 +215,17 @@ def train_models(sensor_id: str) -> dict:
 
 def _get_fitted_model(sensor_id: str, param: str):
     """
-    Return a cached (model, series) pair for this sensor+param, fitting and
-    caching it only if there's no fresh entry. A seasonal Holt-Winters fit
-    over ~1000 points is the expensive part of a forecast request — reusing
-    it across requests is what makes repeat forecasts fast. The cache is
-    invalidated by _clear_cache() whenever the sensor is retrained (so it
-    never serves stale-shaped forecasts), with _MODEL_CACHE_TTL as a safety
-    net in case retrain doesn't run for a long time.
+    Return a cached (model, last_value) pair for this sensor+param. Tries,
+    in order:
+      1. In-memory cache (fast — no network call at all).
+      2. The pre-fitted model uploaded by train_models() — just a download,
+         no optimization, so this is fast even on a cold process.
+      3. Fallback: download the raw training series and fit live. Only hit
+         for sensors trained before pre-fitted models existed, or if the
+         pre-fitted pickle fails to load (e.g. a statsmodels version bump
+         across deploys) — self-healing rather than a hard failure.
+    The in-memory entry is invalidated by _clear_cache() whenever the
+    sensor is retrained, with _MODEL_CACHE_TTL as a safety net.
     """
     key = f"{sensor_id}:{param}"
     now = datetime.now(timezone.utc).timestamp()
@@ -166,49 +233,21 @@ def _get_fitted_model(sensor_id: str, param: str):
     if cached and (now - cached[2]) < _MODEL_CACHE_TTL:
         return cached[0], cached[1]
 
-    series = _download_fresh(f"forecast_{sensor_id}_{param}.pkl")
+    try:
+        model, last_value = _download_fresh(f"forecast_model_{sensor_id}_{param}.pkl")
+    except Exception:
+        series = _download_fresh(f"forecast_{sensor_id}_{param}.pkl")
+        model = _fit_series(series)
+        last_value = float(series.iloc[-1])
 
-    # 10-min resolution → 144 points = 1 day. Need at least 2 full
-    # days of data for seasonal fitting to be meaningful/stable.
-    seasonal_periods = 144
-    use_seasonal = len(series) >= seasonal_periods * 2
-
-    model = None
-    if use_seasonal:
-        try:
-            model = ExponentialSmoothing(
-                series,
-                trend="add",
-                seasonal="add",
-                seasonal_periods=seasonal_periods,
-                initialization_method="estimated",
-            ).fit(optimized=True)
-            # Sanity check — if the fitted model immediately produces
-            # NaN forecasts, treat it as a failed fit and fall back
-            test_pred = model.forecast(6)
-            if np.isnan(test_pred.values).any():
-                model = None
-        except Exception as e:
-            print(f"[AI] Seasonal fit failed for {param}, falling back to trend-only: {e}")
-            model = None
-
-    if model is None:
-        # Trend-only fallback — always succeeds, just less accurate
-        model = ExponentialSmoothing(
-            series,
-            trend="add",
-            seasonal=None,
-            initialization_method="estimated",
-        ).fit(optimized=True)
-
-    _model_cache[key] = (model, series, now)
-    return model, series
+    _model_cache[key] = (model, last_value, now)
+    return model, last_value
 
 
 def _forecast_one_param(sensor_id: str, param: str, live_df: pd.DataFrame, hours_ahead: int) -> dict:
     result = {}
     try:
-        model, series = _get_fitted_model(sensor_id, param)
+        model, last_value = _get_fitted_model(sensor_id, param)
 
         steps = hours_ahead * 6
         pred = model.forecast(steps)
@@ -226,7 +265,7 @@ def _forecast_one_param(sensor_id: str, param: str, live_df: pd.DataFrame, hours
         if not live_df.empty and param in live_df.columns and live_df[param].notna().any():
             latest_actual = float(live_df[param].iloc[-1])
         else:
-            latest_actual = float(series.iloc[-1])
+            latest_actual = last_value
         model_start = float(pred_values[0])
         bias = latest_actual - model_start
         pred_values = pred_values + bias
