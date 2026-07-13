@@ -147,7 +147,10 @@ export default function AIPredictions() {
   const forecastQueries = useQueries({
     queries: activeSensors.map(s => ({
       queryKey: ['forecast', s.id],
-      queryFn: () => api.get(`/ai/forecast/${s.id}`).then(r => r.data),
+      // Longer timeout than the default 30s — a sensor not yet retrained
+      // under the pre-fitted-model scheme falls back to a live model fit,
+      // which can take longer than the default on Render's shared vCPU.
+      queryFn: () => api.get(`/ai/forecast/${s.id}`, { timeout: 60000 }).then(r => r.data),
       retry: false,
       staleTime: 5 * 60 * 1000,
     }))
