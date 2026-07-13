@@ -326,8 +326,12 @@ export default function Dashboard() {
         try {
           const r = await api.get(`/subscriptions/${user.id}/${sensorId}`)
           return { sensorId, data: r.data }
-        } catch {
-          return { sensorId, data: null }
+        } catch (err) {
+          // 404 means no subscription record yet — show as off. Any other
+          // error (timeout, 500, cold backend) must be re-thrown so React
+          // Query retries instead of silently caching a wrong "off" state.
+          if (err.response?.status === 404) return { sensorId, data: null }
+          throw err
         }
       },
       enabled: !!user?.id,
