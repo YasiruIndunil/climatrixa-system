@@ -16,30 +16,40 @@ defaults:
   run:
     working-directory: smart-env-mobile
 
+# ── Job 1: Lint & Test ─────────────────────────────────────────────────────────
 jobs:
-  build:
+  analyze-and-test:
+    name: Analyze & Test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check if Flutter project exists yet
+      - name: Check if Flutter project exists
         id: check
         run: |
           if [ -f "pubspec.yaml" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No pubspec.yaml found yet - skipping build (placeholder component)."
+            echo "No pubspec.yaml found yet — skipping (placeholder component)."
           fi
 
-      - name: Set up Flutter
+      # Java 17 is required by the Android Gradle toolchain (even for analyze)
+      - name: Set up Java 17
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter (stable)
         if: steps.check.outputs.exists == 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
           channel: 'stable'
+          cache: true            # cache Flutter SDK between runs
 
       - name: Install dependencies
         if: steps.check.outputs.exists == 'true'
@@ -47,12 +57,59 @@ jobs:
 
       - name: Run analyzer
         if: steps.check.outputs.exists == 'true'
-        run: flutter analyze
+        # --no-fatal-infos avoids failing on style hints
+        run: flutter analyze --no-fatal-infos
 
-      - name: Run tests
+      - name: Run unit tests
         if: steps.check.outputs.exists == 'true'
-        run: flutter test
+        run: flutter test --coverage
 
-      - name: Build APK (debug)
+# ── Job 2: Build APK ──────────────────────────────────────────────────────────
+  build-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    needs: analyze-and-test   # only build if analyze & test pass
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if Flutter project exists
+        id: check
+        run: |
+          if [ -f "pubspec.yaml" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 17
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter (stable)
+        if: steps.check.outputs.exists == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: flutter pub get
+
+      - name: Build debug APK
         if: steps.check.outputs.exists == 'true'
         run: flutter build apk --debug
+
+      # Upload APK so supervisor / examiner can download & install directly
+      - name: Upload debug APK artifact
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: climatrixa-debug-${{ github.sha }}
+          path: smart-env-mobile/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
