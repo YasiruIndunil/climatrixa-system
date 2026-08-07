@@ -98,7 +98,7 @@ class AqiBadge extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-                color: color.withOpacity(.12),
+                color: color.withValues(alpha: .12),
                 borderRadius: BorderRadius.circular(20)),
             child: Text(label,
                 style: TextStyle(
@@ -211,7 +211,7 @@ class ForecastChart extends StatelessWidget {
               ),
               belowBarData: BarAreaData(
                 show: true,
-                color: lineColor.withOpacity(.1),
+                color: lineColor.withValues(alpha: .1),
               ),
             ),
           ],
@@ -284,7 +284,7 @@ class AlertCard extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                  color: color.withOpacity(.12),
+                  color: color.withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(10)),
               child: Text(typeName,
                   style: TextStyle(
@@ -590,7 +590,7 @@ class _GlobalAlertPopupState extends State<GlobalAlertPopup> {
                   builder: (_, v, __) => LinearProgressIndicator(
                       value: v,
                       minHeight: 4,
-                      backgroundColor: barColor.withOpacity(.2),
+                      backgroundColor: barColor.withValues(alpha: .2),
                       valueColor: AlwaysStoppedAnimation(barColor)),
                 ),
                 Container(

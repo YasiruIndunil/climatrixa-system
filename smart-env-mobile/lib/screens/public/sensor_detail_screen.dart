@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/widgets.dart';
 
@@ -21,7 +22,7 @@ class SensorDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: sensor.when(data:(s)=>Text(s.name), loading:()=>const Text('Loading…'), error:(_,__)=>const Text('Sensor')),
         leading: const BackButton(),
-        actions: [_AlertBellSmall(), const SizedBox(width:8)],
+        actions: [const SizedBox(width:8)],
       ),
       body: sensor.when(
         loading: ()=>const Center(child:CircularProgressIndicator()),

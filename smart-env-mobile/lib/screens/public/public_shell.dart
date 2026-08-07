@@ -69,7 +69,7 @@ class _PublicShellState extends ConsumerState<PublicShell> {
     final isDark      = Theme.of(context).brightness == Brightness.dark;
     final idx         = _currentIndex(context);
     const teal        = Color(0xFF14B8A6);
-    const tealDark    = Color(0xFF0F766E);
+
 
     // Re-check for new popups whenever alerts update
     ref.listen(alertsProvider, (_, next) {
@@ -119,7 +119,7 @@ class _PublicShellState extends ConsumerState<PublicShell> {
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       decoration: sel
                           ? BoxDecoration(
-                              color: teal.withOpacity(.1),
+                              color: teal.withValues(alpha: .1),
                               borderRadius: BorderRadius.circular(10))
                           : null,
                       child: Column(
@@ -320,7 +320,7 @@ class _PublicDrawer extends StatelessWidget {
                         )
                       : null,
                   tileColor: active
-                      ? teal.withOpacity(.08)
+                      ? teal.withValues(alpha: .08)
                       : Colors.transparent,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),

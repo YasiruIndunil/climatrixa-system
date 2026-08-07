@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,8 +103,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       child:ElevatedButton(
                         style:ElevatedButton.styleFrom(backgroundColor:teal,foregroundColor:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10))),
                         onPressed:(){
-                          final path = widget.adminMode ? '/admin/sensors' : '/dashboard/sensor/${_selected!.id}';
-                          context.push('/dashboard/sensor/${_selected!.id}');
+                              context.push('/dashboard/sensor/${_selected!.id}');
                         },
                         child:const Text('View Sensor Detail →', style:TextStyle(fontSize:12)),
                       ),
@@ -127,7 +127,7 @@ class _TrianglePainter extends CustomPainter {
   _TrianglePainter({required this.color});
   @override void paint(Canvas c, Size s){
     final p=Paint()..color=color;
-    final path=Path()..moveTo(0,0)..lineTo(s.width,0)..lineTo(s.width/2,s.height)..close();
+    final path=ui.Path()..moveTo(0,0)..lineTo(s.width,0)..lineTo(s.width/2,s.height)..close();
     c.drawPath(path,p);
   }
   @override bool shouldRepaint(_)=>false;

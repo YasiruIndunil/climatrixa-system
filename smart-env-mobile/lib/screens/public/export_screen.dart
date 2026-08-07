@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
-import '../../core/api_client.dart';
-import '../../models/models.dart';
 import '../../providers/providers.dart';
 
 class ExportScreen extends ConsumerStatefulWidget {
@@ -78,7 +76,9 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           )),
           const SizedBox(height:10),
           _section('Data Type', Column(children:[
+// ignore: deprecated_member_use
             RadioListTile(dense:true, contentPadding:EdgeInsets.zero, title:const Text('Sensor Readings',style:TextStyle(fontSize:12)), value:'readings', groupValue:_dataType, activeColor:teal, onChanged:(v)=>setState(()=>_dataType=v!)),
+// ignore: deprecated_member_use
             RadioListTile(dense:true, contentPadding:EdgeInsets.zero, title:const Text('Alert Events',style:TextStyle(fontSize:12)), value:'alerts', groupValue:_dataType, activeColor:teal, onChanged:(v)=>setState(()=>_dataType=v!)),
           ])),
           const SizedBox(height:16),

@@ -27,7 +27,7 @@ class _S extends ConsumerState<AdminAlertsScreen> {
         title:const Text('Alerts',style:TextStyle(color:Colors.white)),
         actions:[
           if(_bulkMode&&_selected.isNotEmpty)
-            TextButton(onPressed:_ackSelected, child:const Text('Ack (${_selected.length})',style:TextStyle(color:Colors.white))),
+            TextButton(onPressed:_ackSelected, child:Text('Ack (${_selected.length})',style:const TextStyle(color:Colors.white))),
           IconButton(icon:Icon(_bulkMode?Icons.close:Icons.checklist,color:Colors.white), onPressed:()=>setState(()=>_bulkMode=!_bulkMode)),
           const SizedBox(width:8),
         ],
@@ -71,7 +71,7 @@ class _S extends ConsumerState<AdminAlertsScreen> {
       ]),
     );
   }
-  Widget _SummaryChip(String label, String count, Color color) => Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:color.withOpacity(.1),borderRadius:BorderRadius.circular(8)),child:Column(children:[Text(count,style:TextStyle(fontSize:14,fontWeight:FontWeight.w700,color:color)),Text(label,style:TextStyle(fontSize:8.5,color:color))]));
+  Widget _SummaryChip(String label, String count, Color color) => Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:color.withValues(alpha: .1),borderRadius:BorderRadius.circular(8)),child:Column(children:[Text(count,style:TextStyle(fontSize:14,fontWeight:FontWeight.w700,color:color)),Text(label,style:TextStyle(fontSize:8.5,color:color))]));
   Future<void> _ackSelected() async {
     for(final id in _selected) await ref.read(alertsProvider.notifier).acknowledge(id);
     setState((){_selected.clear();_bulkMode=false;});

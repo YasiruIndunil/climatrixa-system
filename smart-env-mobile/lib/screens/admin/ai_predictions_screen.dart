@@ -15,7 +15,7 @@ class _S extends ConsumerState<AiPredictionsScreen> {
   bool _training = false;
   static const _periods = [(6,'6h'),(12,'12h'),(24,'24h'),(48,'48h')];
   static const _metrics = [('temperature','Temp',Color(0xFF14B8A6)),('humidity','Humidity',Color(0xFF3B82F6)),('aqi','IAQ',Color(0xFF8B5CF6)),('pressure','Pressure',Color(0xFFF59E0B))];
-  const purple = Color(0xFF7C3AED);
+  static const _purple = Color(0xFF7C3AED);
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class _S extends ConsumerState<AiPredictionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor:purple, foregroundColor:Colors.white,
+        backgroundColor:_purple, foregroundColor:Colors.white,
         leading:Builder(builder:(ctx)=>IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>Scaffold.of(ctx).openDrawer())),
         title:const Text('AI Predictions',style:TextStyle(color:Colors.white)),
         actions:[IconButton(icon:const Icon(Icons.model_training,color:Colors.white), onPressed:_sensorId==null?null:()=>_train(), tooltip:'Re-train model')],
@@ -43,13 +43,13 @@ class _S extends ConsumerState<AiPredictionsScreen> {
         // Period selector
         Row(children:_periods.map((p){
           final (h,label)=p; final sel=_hours==h;
-          return GestureDetector(onTap:()=>setState(()=>_hours=h), child:Container(margin:const EdgeInsets.only(right:6), padding:const EdgeInsets.symmetric(horizontal:12,vertical:7), decoration:BoxDecoration(color:sel?purple:Colors.white,borderRadius:BorderRadius.circular(8),border:Border.all(color:sel?purple:const Color(0xFFE5E7EB))), child:Text(label,style:TextStyle(fontSize:11,fontWeight:sel?FontWeight.w600:FontWeight.w400,color:sel?Colors.white:const Color(0xFF6B7280)))));
+          return GestureDetector(onTap:()=>setState(()=>_hours=h), child:Container(margin:const EdgeInsets.only(right:6), padding:const EdgeInsets.symmetric(horizontal:12,vertical:7), decoration:BoxDecoration(color:sel?_purple:Colors.white,borderRadius:BorderRadius.circular(8),border:Border.all(color:sel?_purple:const Color(0xFFE5E7EB))), child:Text(label,style:TextStyle(fontSize:11,fontWeight:sel?FontWeight.w600:FontWeight.w400,color:sel?Colors.white:const Color(0xFF6B7280)))));
         }).toList()),
         const SizedBox(height:10),
         // Metric tabs
         Row(children:_metrics.map((m){
           final (key,lbl,c)=m; final sel=key==_metric;
-          return GestureDetector(onTap:()=>setState(()=>_metric=key), child:Container(margin:const EdgeInsets.only(right:6), padding:const EdgeInsets.symmetric(horizontal:8,vertical:5), decoration:BoxDecoration(color:sel?c.withOpacity(.12):Colors.transparent,borderRadius:BorderRadius.circular(6),border:Border.all(color:sel?c:const Color(0xFFE5E7EB))), child:Text(lbl,style:TextStyle(fontSize:9.5,fontWeight:sel?FontWeight.w600:FontWeight.w400,color:sel?c:const Color(0xFF6B7280)))));
+          return GestureDetector(onTap:()=>setState(()=>_metric=key), child:Container(margin:const EdgeInsets.only(right:6), padding:const EdgeInsets.symmetric(horizontal:8,vertical:5), decoration:BoxDecoration(color:sel?c.withValues(alpha: .12):Colors.transparent,borderRadius:BorderRadius.circular(6),border:Border.all(color:sel?c:const Color(0xFFE5E7EB))), child:Text(lbl,style:TextStyle(fontSize:9.5,fontWeight:sel?FontWeight.w600:FontWeight.w400,color:sel?c:const Color(0xFF6B7280)))));
         }).toList()),
         const SizedBox(height:10),
         // Chart

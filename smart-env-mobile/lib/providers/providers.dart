@@ -79,19 +79,13 @@ final sensorDetailProvider =
 });
 
 // ── Readings (live — polled every 30 s) ──────────────────────────────────────
-final readingsProvider = StreamProvider<List<Reading>>((ref) {
+final readingsProvider = StreamProvider<List<Reading>>((ref) async* {
   final api = ref.watch(apiProvider);
-  return Stream.periodic(Duration(milliseconds: kReadingPollMs), (_) => _)
-      .startWith(null)
-      .asyncMap((_) => api.getLatestReadings());
-});
-
-extension _StartWith<T> on Stream<T> {
-  Stream<T> startWith(T value) async* {
-    yield value;
-    yield* this;
+  while (true) {
+    yield await api.getLatestReadings();
+    await Future.delayed(Duration(milliseconds: kReadingPollMs));
   }
-}
+});
 
 // ── Alerts (polled every 20 s) ────────────────────────────────────────────────
 class AlertsNotifier extends StateNotifier<AsyncValue<List<AlertEvent>>> {

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
-import '../../widgets/widgets.dart';
 
 class AdminOverviewScreen extends ConsumerWidget {
   const AdminOverviewScreen({super.key});
@@ -47,7 +46,7 @@ class AdminOverviewScreen extends ConsumerWidget {
             const Text('Sensor Status', style:TextStyle(fontSize:12,fontWeight:FontWeight.w600)),
             const SizedBox(height:10),
             ...sensors.take(5).map((s){
-              final r = readings.firstWhere((r)=>r.sensorId==s.id, orElse:()=>null as dynamic);
+              // latest reading available via readings list
               final hasAlert = alerts.any((a)=>a.sensorId==s.id&&!a.acknowledged);
               return Padding(padding:const EdgeInsets.only(bottom:8), child:Row(children:[
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
@@ -100,5 +99,5 @@ class _StatCard extends StatelessWidget {
 class _ActionBtn extends StatelessWidget {
   final String label; final IconData icon; final Color color; final VoidCallback onTap;
   const _ActionBtn(this.label,this.icon,this.color,this.onTap);
-  @override Widget build(BuildContext context) => GestureDetector(onTap:onTap, child:Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration:BoxDecoration(color:color.withOpacity(.08),borderRadius:BorderRadius.circular(8)), child:Row(children:[Icon(icon,size:14,color:color),const SizedBox(width:6),Text(label,style:TextStyle(fontSize:11,color:color,fontWeight:FontWeight.w500))])));
+  @override Widget build(BuildContext context) => GestureDetector(onTap:onTap, child:Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration:BoxDecoration(color:color.withValues(alpha: .08),borderRadius:BorderRadius.circular(8)), child:Row(children:[Icon(icon,size:14,color:color),const SizedBox(width:6),Text(label,style:TextStyle(fontSize:11,color:color,fontWeight:FontWeight.w500))])));
 }

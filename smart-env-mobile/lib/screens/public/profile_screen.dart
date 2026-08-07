@@ -67,7 +67,7 @@ class ProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(children: [
                   Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
-                  Switch(value: true, activeColor: teal, onChanged: (_) {}),
+                  Switch(value: true, activeThumbColor: teal, onChanged: (_) {}),
                 ]),
               )),
             ]),

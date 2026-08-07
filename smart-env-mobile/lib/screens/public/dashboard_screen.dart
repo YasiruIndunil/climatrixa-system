@@ -20,7 +20,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final readings  = ref.watch(readingsProvider);
     final sensors   = ref.watch(sensorsProvider);
-    const teal      = Color(0xFF14B8A6);
+
 
     return Scaffold(
       appBar: AppBar(
@@ -223,7 +223,7 @@ class _ForecastCard extends ConsumerWidget {
               margin: const EdgeInsets.only(right: 6),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                  color: sel ? c.withOpacity(.12) : Colors.transparent,
+                  color: sel ? c.withValues(alpha: .12) : Colors.transparent,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                       color: sel ? c : const Color(0xFFE5E7EB))),

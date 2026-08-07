@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
-import '../../widgets/widgets.dart';
 
 class AdminSensorsScreen extends ConsumerStatefulWidget {
   const AdminSensorsScreen({super.key});
@@ -66,7 +66,7 @@ class _S extends ConsumerState<AdminSensorsScreen> {
       ]),
     );
   }
-  Widget _Btn(String l, IconData ic, Color c, VoidCallback fn) => GestureDetector(onTap:fn, child:Container(padding:const EdgeInsets.symmetric(vertical:5), decoration:BoxDecoration(color:c.withOpacity(.1),borderRadius:BorderRadius.circular(7)), child:Row(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(ic,size:11,color:c),const SizedBox(width:3),Text(l,style:TextStyle(fontSize:9.5,color:c,fontWeight:FontWeight.w500))])));
+  Widget _Btn(String l, IconData ic, Color c, VoidCallback fn) => GestureDetector(onTap:fn, child:Container(padding:const EdgeInsets.symmetric(vertical:5), decoration:BoxDecoration(color:c.withValues(alpha: .1),borderRadius:BorderRadius.circular(7)), child:Row(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(ic,size:11,color:c),const SizedBox(width:3),Text(l,style:TextStyle(fontSize:9.5,color:c,fontWeight:FontWeight.w500))])));
   void _confirmDelete(BuildContext ctx, WidgetRef ref, String id, String name){
     showDialog(context:ctx, builder:(_)=>AlertDialog(title:const Text('Delete sensor?'), content:Text('Remove $name from the system?'), actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')), TextButton(onPressed:()async{Navigator.pop(ctx);await ref.read(apiProvider).deleteSensor(id);ref.invalidate(sensorsProvider);},child:const Text('Delete',style:TextStyle(color:Color(0xFFEF4444))))]));
   }
