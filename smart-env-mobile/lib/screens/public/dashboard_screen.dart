@@ -24,11 +24,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: Builder(builder: (ctx) =>
-            IconButton(
+        leading: IconButton(
               icon: const Icon(Icons.menu),
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-            )),
+              onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer(),
+            ),
         title: const Text('Dashboard'),
         actions: [
           _AlertBell(),

@@ -1,3 +1,4 @@
+import 'admin_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -41,7 +42,7 @@ class _S extends ConsumerState<AdminExportScreen> {
     const purple = Color(0xFF7C3AED);
     return Scaffold(
       appBar: AppBar(backgroundColor:purple, foregroundColor:Colors.white,
-        leading:Builder(builder:(ctx)=>IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>Scaffold.of(ctx).openDrawer())),
+        leading:IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>AdminShell.scaffoldKey.currentState?.openDrawer()),
         title:const Text('Export',style:TextStyle(color:Colors.white)),
       ),
       body:ListView(padding:const EdgeInsets.all(14),children:[

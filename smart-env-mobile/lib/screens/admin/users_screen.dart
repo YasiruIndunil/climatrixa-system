@@ -1,3 +1,4 @@
+import 'admin_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/models.dart';
@@ -15,7 +16,7 @@ class _S extends ConsumerState<UsersScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor:purple, foregroundColor:Colors.white,
-        leading:Builder(builder:(ctx)=>IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>Scaffold.of(ctx).openDrawer())),
+        leading:IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>AdminShell.scaffoldKey.currentState?.openDrawer()),
         title:const Text('User Management',style:TextStyle(color:Colors.white)),
         actions:[IconButton(icon:const Icon(Icons.person_add,color:Colors.white),onPressed:()=>_showAddUser(context,ref)), const SizedBox(width:8)],
       ),

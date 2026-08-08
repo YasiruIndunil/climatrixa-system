@@ -9,7 +9,12 @@ import '../../widgets/widgets.dart';
 class AdminShell extends ConsumerStatefulWidget {
   final Widget child;
   const AdminShell({super.key, required this.child});
-  @override ConsumerState<AdminShell> createState() => _AdminShellState();
+
+  // Static key so any admin screen can open the drawer
+  static final scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  ConsumerState<AdminShell> createState() => _AdminShellState();
 }
 class _AdminShellState extends ConsumerState<AdminShell> {
   final Map<String,int> _dismissed = {};
@@ -31,6 +36,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final auth = ref.watch(authProvider);
     ref.listen(alertsProvider,(_,next){if(next.hasValue)_checkAlerts();});
     return Scaffold(
+      key: AdminShell.scaffoldKey,
       body: Stack(children:[
         widget.child,
         if(_pendingPopup!=null) GlobalAlertPopup(event:_pendingPopup!, onDismiss:(){setState((){_dismissed[_pendingPopup!.id]=DateTime.now().millisecondsSinceEpoch;_pendingPopup=null;});}, onAcknowledge:(id)=>ref.read(alertsProvider.notifier).acknowledge(id)),

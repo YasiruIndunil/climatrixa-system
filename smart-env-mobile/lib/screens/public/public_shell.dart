@@ -10,6 +10,9 @@ class PublicShell extends ConsumerStatefulWidget {
   final Widget child;
   const PublicShell({super.key, required this.child});
 
+  // Static key so any child screen can open the drawer
+  static final scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   ConsumerState<PublicShell> createState() => _PublicShellState();
 }
@@ -77,6 +80,7 @@ class _PublicShellState extends ConsumerState<PublicShell> {
     });
 
     return Scaffold(
+      key: PublicShell.scaffoldKey,
       body: Stack(children: [
         widget.child,
         if (_pendingPopup != null)

@@ -1,3 +1,4 @@
+import 'admin_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
@@ -23,7 +24,7 @@ class _S extends ConsumerState<AdminAlertsScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor:purple, foregroundColor:Colors.white,
-        leading:Builder(builder:(ctx)=>IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>Scaffold.of(ctx).openDrawer())),
+        leading:IconButton(icon:const Icon(Icons.menu,color:Colors.white),onPressed:()=>AdminShell.scaffoldKey.currentState?.openDrawer()),
         title:const Text('Alerts',style:TextStyle(color:Colors.white)),
         actions:[
           if(_bulkMode&&_selected.isNotEmpty)
