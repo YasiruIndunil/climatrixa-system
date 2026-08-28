@@ -1,128 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:intl/intl.dart';
+import '../../core/theme.dart';
 import '../../providers/providers.dart';
+import 'public_shell.dart';
 
 class ExportScreen extends ConsumerStatefulWidget {
   const ExportScreen({super.key});
-  @override ConsumerState<ExportScreen> createState() => _ExportScreenState();
+  @override ConsumerState<ExportScreen> createState() => _S();
 }
-class _ExportScreenState extends ConsumerState<ExportScreen> {
-  DateTime _from = DateTime.now().subtract(const Duration(days:7));
-  DateTime _to   = DateTime.now();
-  final Set<String> _selectedSensors = {};
-  String _dataType = 'readings'; // 'readings' | 'alerts'
-  bool _loading = false;
-  String? _lastFile;
-
-  Future<void> _export() async {
-    if(_selectedSensors.isEmpty){
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Select at least one sensor')));
-      return;
-    }
-    setState(()=>_loading=true);
-    try{
-      final api = ref.read(apiProvider);
-      final fmt = DateFormat('yyyy-MM-dd');
-      for(final id in _selectedSensors){
-        final file = _dataType=='readings'
-          ? await api.downloadReadings(sensorId:id, from:fmt.format(_from), to:fmt.format(_to))
-          : await api.downloadAlertEvents(sensorId:id, from:fmt.format(_from), to:fmt.format(_to));
-        setState(()=>_lastFile=file.path);
-      }
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export saved'), action:SnackBarAction(label:'Open', onPressed:()=>OpenFilex.open(_lastFile!))));
-    }catch(e){
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export failed: $e')));
-    } finally { if(mounted) setState(()=>_loading=false); }
-  }
-
-  Future<void> _pickDate(bool isFrom) async {
-    final picked = await showDatePicker(context:context, initialDate:isFrom?_from:_to, firstDate:DateTime(2024), lastDate:DateTime.now());
-    if(picked!=null) setState(()=>isFrom?_from=picked:_to=picked);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final sensors = ref.watch(sensorsProvider);
+class _S extends ConsumerState<ExportScreen> {
+  String _sensor = 'all'; DateTime? _from, _to; bool _loading = false;
+  @override Widget build(BuildContext context) {
+    final sensors = ref.watch(sensorsProvider).valueOrNull ?? [];
+    final dark = ref.watch(themeModeProvider) == ThemeMode.dark;
+    final bg = dark ? kGray950 : kGray50;
+    final card = dark ? kGray900 : kGrayWhite;
+    final bd = dark ? kGray800 : kGray100;
+    final textP = dark ? Colors.white : kGray900Text;
     final fmt = DateFormat('yyyy-MM-dd');
-    const teal = Color(0xFF14B8A6);
     return Scaffold(
-      appBar: AppBar(title:const Text('Export Data')),
-      body: ListView(
-        padding:const EdgeInsets.all(14),
-        children:[
-          _section('Date Range', Column(children:[
-            Row(children:[
-              Expanded(child:_DateTile(label:'From', date:fmt.format(_from), onTap:()=>_pickDate(true))),
-              const SizedBox(width:10),
-              Expanded(child:_DateTile(label:'To', date:fmt.format(_to), onTap:()=>_pickDate(false))),
-            ]),
+      backgroundColor: bg,
+      appBar: AppBar(backgroundColor: dark ? kGray950 : kGrayWhite, elevation: 0,
+        leading: Builder(builder: (ctx) => IconButton(icon: Icon(Icons.menu, color: dark ? kGray400 : kGray600), onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer())),
+        title: Text('Export Data', style: TextStyle(color: textP, fontWeight: FontWeight.w700)),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: dark ? kGray800 : kGray100, height: 1))),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(14), border: Border.all(color: bd)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Sensor readings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textP)),
+            const SizedBox(height: 12),
+            _lbl('SENSOR', dark),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: dark ? kGray800 : kGray50, borderRadius: BorderRadius.circular(10), border: Border.all(color: bd)),
+              child: DropdownButtonHideUnderline(child: DropdownButton<String>(value: _sensor, isExpanded: true, dropdownColor: dark ? kGray900 : kGrayWhite,
+                style: TextStyle(color: textP, fontSize: 13),
+                onChanged: (v) { if (v != null) setState(() => _sensor = v); },
+                items: [const DropdownMenuItem(value: 'all', child: Text('All sensors')),
+                  ...sensors.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name, overflow: TextOverflow.ellipsis)))]))),
+            const SizedBox(height: 10),
+            _lbl('FROM DATE', dark),
+            _datePicker(_from, (d) => setState(() => _from = d), context, dark, bd, textP),
+            const SizedBox(height: 10),
+            _lbl('TO DATE', dark),
+            _datePicker(_to, (d) => setState(() => _to = d), context, dark, bd, textP),
+            const SizedBox(height: 14),
+            SizedBox(width: double.infinity, child: ElevatedButton.icon(
+              onPressed: _loading ? null : () async {
+                setState(() => _loading = true);
+                try {
+                  final f = await ref.read(apiProvider).downloadReadings(
+                    sensorId: _sensor == 'all' ? null : _sensor,
+                    from: _from != null ? fmt.format(_from!) : null,
+                    to: _to != null ? fmt.format(_to!) : null);
+                  if (mounted) OpenFilex.open(f.path);
+                } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); }
+                finally { if (mounted) setState(() => _loading = false); }
+              },
+              icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.download, size: 16),
+              label: Text(_loading ? 'Exporting…' : 'Download CSV'),
+              style: ElevatedButton.styleFrom(backgroundColor: kTeal600, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 12)))),
           ])),
-          const SizedBox(height:10),
-          _section('Select Sensors', sensors.when(
-            loading:()=>const CircularProgressIndicator(),
-            error:(e,_)=>Text('$e'),
-            data:(list){
-              if(_selectedSensors.isEmpty) _selectedSensors.addAll(list.map((s)=>s.id));
-              return Column(children:list.map((s)=>CheckboxListTile(
-                dense:true, contentPadding:EdgeInsets.zero,
-                title:Text(s.name, style:const TextStyle(fontSize:12)),
-                value:_selectedSensors.contains(s.id),
-                activeColor:teal,
-                onChanged:(v)=>setState(()=>v!?_selectedSensors.add(s.id):_selectedSensors.remove(s.id)),
-              )).toList());
-            },
-          )),
-          const SizedBox(height:10),
-          _section('Data Type', Column(children:[
-// ignore: deprecated_member_use
-            RadioListTile(dense:true, contentPadding:EdgeInsets.zero, title:const Text('Sensor Readings',style:TextStyle(fontSize:12)), value:'readings', groupValue:_dataType, activeColor:teal, onChanged:(v)=>setState(()=>_dataType=v!)),
-// ignore: deprecated_member_use
-            RadioListTile(dense:true, contentPadding:EdgeInsets.zero, title:const Text('Alert Events',style:TextStyle(fontSize:12)), value:'alerts', groupValue:_dataType, activeColor:teal, onChanged:(v)=>setState(()=>_dataType=v!)),
-          ])),
-          const SizedBox(height:16),
-          SizedBox(width:double.infinity, child:ElevatedButton.icon(
-            onPressed:_loading?null:_export,
-            icon:_loading?const SizedBox(width:16,height:16,child:CircularProgressIndicator(color:Colors.white,strokeWidth:2)):const Icon(Icons.download, size:16),
-            label:Text(_loading?'Exporting…':'Export CSV'),
-            style:ElevatedButton.styleFrom(backgroundColor:teal, foregroundColor:Colors.white, shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),
-          )),
-          if(_lastFile!=null)...[
-            const SizedBox(height:10),
-            _section('Last Export', ListTile(dense:true, contentPadding:EdgeInsets.zero, leading:const Icon(Icons.description_outlined, size:16, color:Color(0xFF6B7280)), title:Text(_lastFile!.split('/').last, style:const TextStyle(fontSize:11)), trailing:TextButton(onPressed:()=>OpenFilex.open(_lastFile!), child:const Text('Open',style:TextStyle(fontSize:11))))),
-          ],
-          const SizedBox(height:30),
-        ],
-      ),
+      ]),
     );
   }
-
-  Widget _section(String title, Widget child) => Container(
-    padding:const EdgeInsets.all(14),
-    decoration:BoxDecoration(color:Colors.white, borderRadius:BorderRadius.circular(12)),
-    child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
-      Text(title, style:const TextStyle(fontSize:12, fontWeight:FontWeight.w600, color:Color(0xFF1F2937))),
-      const SizedBox(height:10),
-      child,
-    ]),
-  );
-}
-
-class _DateTile extends StatelessWidget {
-  final String label, date;
-  final VoidCallback onTap;
-  const _DateTile({required this.label, required this.date, required this.onTap});
-  @override Widget build(BuildContext context) => GestureDetector(
-    onTap:onTap,
-    child:Container(
-      padding:const EdgeInsets.all(10),
-      decoration:BoxDecoration(border:Border.all(color:const Color(0xFFE5E7EB)), borderRadius:BorderRadius.circular(8)),
-      child:Column(crossAxisAlignment:CrossAxisAlignment.start, children:[
-        Text(label, style:const TextStyle(fontSize:8, color:Color(0xFF9CA3AF))),
-        const SizedBox(height:2),
-        Text(date, style:const TextStyle(fontSize:11, fontWeight:FontWeight.w500)),
-      ]),
-    ),
-  );
+  Widget _lbl(String t, bool dark) => Padding(padding: const EdgeInsets.only(bottom: 5),
+    child: Text(t, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: .5, color: kGray500)));
+  Widget _datePicker(DateTime? date, Function(DateTime) onPick, BuildContext ctx, bool dark, Color bd, Color textP) =>
+    GestureDetector(onTap: () async {
+      final p = await showDatePicker(context: ctx, initialDate: date ?? DateTime.now(), firstDate: DateTime(2024), lastDate: DateTime.now());
+      if (p != null) onPick(p);
+    }, child: Container(height: 44, padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(color: dark ? kGray800 : kGray50, borderRadius: BorderRadius.circular(10), border: Border.all(color: bd)),
+      child: Row(children: [
+        Text(date != null ? DateFormat('yyyy-MM-dd').format(date) : 'Select date', style: TextStyle(color: date != null ? textP : kGray500, fontSize: 13)),
+        const Spacer(), const Icon(Icons.calendar_today, size: 14, color: kGray500)])));
 }

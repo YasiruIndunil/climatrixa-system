@@ -1,249 +1,151 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/theme.dart';
 import '../providers/providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
-
-  @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  @override ConsumerState<LoginScreen> createState() => _S();
 }
+class _S extends ConsumerState<LoginScreen> {
+  final _email = TextEditingController();
+  final _pass  = TextEditingController();
+  final _form  = GlobalKey<FormState>();
+  bool _obs    = true;
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _email    = TextEditingController();
-  final _password = TextEditingController();
-  final _form     = GlobalKey<FormState>();
-  bool _obscure   = true;
-
-  @override
-  void dispose() {
-    _email.dispose();
-    _password.dispose();
-    super.dispose();
-  }
+  @override void dispose() { _email.dispose(); _pass.dispose(); super.dispose(); }
 
   Future<void> _signIn() async {
     if (!(_form.currentState?.validate() ?? false)) return;
-    final auth = ref.read(authProvider.notifier);
-    final ok = await auth.login(_email.text.trim(), _password.text);
+    final ok = await ref.read(authProvider.notifier).login(_email.text.trim(), _pass.text);
     if (!mounted) return;
-    if (ok) {
-      final isAdmin = ref.read(authProvider).isAdmin;
-      context.go(isAdmin ? '/admin' : '/dashboard');
-    }
+    if (ok) context.go(ref.read(authProvider).isAdmin ? '/admin' : '/dashboard');
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth  = ref.watch(authProvider);
-    const teal  = Color(0xFF14B8A6);
-    const dark  = Color(0xFF1F2937);
+    final auth = ref.watch(authProvider);
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Form(
-              key: _form,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 24),
-
-                  // ── Brand logo ─────────────────────────────────────────
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: teal,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Icon(Icons.eco, size: 32, color: Colors.white),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'CLIMATRIXA',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                      color: dark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Smart Environmental Monitor',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-                  ),
-                  const SizedBox(height: 36),
-
-                  // ── [1] Email field ────────────────────────────────────
-                  TextFormField(
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Email address',
-                      prefixIcon: Icon(Icons.mail_outline, size: 18),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Email is required';
-                      if (!v.contains('@')) return 'Enter a valid email';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── [2] Password field ─────────────────────────────────
-                  TextFormField(
-                    controller: _password,
-                    obscureText: _obscure,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _signIn(),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline, size: 18),
-                      // ── [3] Eye toggle ─────────────────────────────────
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure ? Icons.visibility_off : Icons.visibility,
-                          size: 18,
-                          color: const Color(0xFF9CA3AF),
-                        ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Password is required';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ── [5] Forgot password ────────────────────────────────
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => _showForgotPassword(context),
-                      style: TextButton.styleFrom(
-                          foregroundColor: teal,
-                          padding: EdgeInsets.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      child: const Text(
-                        'Forgot your password?',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ── Sign In button ────────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: auth.loading ? null : _signIn,
-                      child: auth.loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Text('SIGN IN'),
-                    ),
-                  ),
-
-                  // ── Error message ──────────────────────────────────────
-                  if (auth.error != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF0F0),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.error_outline,
-                            size: 14, color: Color(0xFFEF4444)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(auth.error!,
-                              style: const TextStyle(
-                                  fontSize: 12, color: Color(0xFFDC2626))),
-                        ),
-                      ]),
-                    ),
-                  ],
-
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Cardiff Metropolitan University · 2025',
-                    style: TextStyle(fontSize: 10, color: Color(0xFFD1D5DB)),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
+      backgroundColor: dark ? kGray950 : kGray50,
+      body: SafeArea(child: Center(child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Form(key: _form, child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: dark ? kGray900 : kGrayWhite,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: dark ? kGray800 : kGray100),
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showForgotPassword(BuildContext context) {
-    final ctrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 24, right: 24, top: 24,
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-              width: 36, height: 4,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // Logo
+            Container(
+              width: 56, height: 56,
               decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 20),
-          const Text('Reset Password',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          const Text('Enter your email and we\'ll send a magic link.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-          const SizedBox(height: 16),
-          TextField(
-            controller: ctrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-                labelText: 'Email address',
-                prefixIcon: Icon(Icons.mail_outline, size: 18)),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          'If your email is registered, you\'ll receive a reset link.')),
-                );
-              },
-              child: const Text('SEND RESET LINK'),
+                gradient: const LinearGradient(
+                  colors: [kTeal400, kTeal600],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.eco_rounded, size: 30, color: Colors.white),
             ),
-          ),
-          const SizedBox(height: 24),
-        ]),
-      ),
+            const SizedBox(height: 14),
+            Text('Climatrixa', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: dark ? Colors.white : kGray900Text)),
+            const SizedBox(height: 4),
+            Text('Environmental Monitoring System', style: TextStyle(fontSize: 13, color: kGray500)),
+            const SizedBox(height: 28),
+
+            // Email
+            _label('EMAIL ADDRESS', dark),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _email, keyboardType: TextInputType.emailAddress, textInputAction: TextInputAction.next,
+              style: TextStyle(color: dark ? Colors.white : kGray900Text, fontSize: 14),
+              decoration: _fieldDeco('you@example.com', dark),
+              validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+            ),
+            const SizedBox(height: 16),
+
+            // Password
+            _label('PASSWORD', dark),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _pass, obscureText: _obs, onFieldSubmitted: (_) => _signIn(),
+              style: TextStyle(color: dark ? Colors.white : kGray900Text, fontSize: 14),
+              decoration: _fieldDeco('••••••••', dark, suffix: IconButton(
+                icon: Icon(_obs ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18, color: kGray500),
+                onPressed: () => setState(() => _obs = !_obs),
+              )),
+              validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
+            ),
+            const SizedBox(height: 8),
+
+            Align(alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {},
+                style: TextButton.styleFrom(foregroundColor: kTeal600, padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                child: const Text('Forgot password?', style: TextStyle(fontSize: 13)),
+              )),
+            const SizedBox(height: 16),
+
+            // Sign in
+            SizedBox(width: double.infinity,
+              child: ElevatedButton(
+                onPressed: auth.loading ? null : _signIn,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kTeal600, foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
+                ),
+                child: auth.loading
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Sign in', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              )),
+
+            if (auth.error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: kRed500.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kRed500.withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.error_outline, size: 16, color: kRed500),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(auth.error!, style: const TextStyle(fontSize: 12, color: kRed500))),
+                ]),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+            Text('Accounts are created by administrators only',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: dark ? kGray600 : kGray400)),
+          ]),
+        )),
+      ))),
     );
   }
+
+  Widget _label(String t, bool dark) => Align(
+    alignment: Alignment.centerLeft,
+    child: Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: .6, color: dark ? kGray400 : kGray600)),
+  );
+
+  InputDecoration _fieldDeco(String hint, bool dark, {Widget? suffix}) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: dark ? kGray600 : kGray400, fontSize: 14),
+    filled: true, fillColor: dark ? kGray800 : kGray50,
+    suffixIcon: suffix,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: dark ? kGray700 : kGray100)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: dark ? kGray700 : kGray100)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kTeal600, width: 1.5)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+  );
 }

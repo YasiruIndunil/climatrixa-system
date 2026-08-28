@@ -1,55 +1,43 @@
 name: climatrixa_mobile
-description: Climatrixa Smart Environmental Monitoring System — Mobile App
+description: Climatrixa — Smart Environmental Monitoring System
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.1.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
   # State management
-  flutter_riverpod: ^2.4.9
+  flutter_riverpod: ^2.5.1
 
   # Navigation
-  go_router: ^13.2.0
+  go_router: ^14.2.7
 
-  # HTTP
-  http: ^1.2.0
+  # Map
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
-  # Secure JWT storage
-  flutter_secure_storage: ^9.0.0
+  # Charts
+  fl_chart: ^0.69.0
 
-  # Charts (AI forecast)
-  fl_chart: ^0.66.2
+  # HTTP + Auth
+  http: ^1.2.2
+  flutter_secure_storage: ^9.2.2
 
-  # Map (OpenStreetMap — no API key needed)
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.0
-
-  # Date & time
+  # Date formatting + file
   intl: ^0.19.0
-  timeago: ^3.6.0
+  open_filex: ^4.4.0
 
-  # File download / open
-  path_provider: ^2.1.2
-  open_filex: ^4.3.4
-
-  # Preferences (dark mode, etc.)
-  shared_preferences: ^2.2.2
-
-  # Loading shimmer
-  shimmer: ^3.0.0
-
-  cupertino_icons: ^1.0.6
+  # Icons
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
-  # assets: add image assets here when needed

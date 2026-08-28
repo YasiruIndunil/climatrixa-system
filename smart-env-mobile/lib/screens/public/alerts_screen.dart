@@ -1,72 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/theme.dart';
 import '../../providers/providers.dart';
-import '../../widgets/widgets.dart';
+import 'public_shell.dart';
 
-class AlertsScreen extends ConsumerStatefulWidget {
+class AlertsScreen extends ConsumerWidget {
   const AlertsScreen({super.key});
-  @override ConsumerState<AlertsScreen> createState() => _AlertsScreenState();
-}
-class _AlertsScreenState extends ConsumerState<AlertsScreen> {
-  String _filter = 'all';
-  @override
-  Widget build(BuildContext context) {
-    final alerts = ref.watch(alertsProvider);
-    const teal = Color(0xFF14B8A6);
-    final tabs = ['all','threshold','predicted','anomaly'];
-    final labels = ['All','Threshold','AI Pred','Anomaly'];
+  @override Widget build(BuildContext context, WidgetRef ref) {
+    final alertsAsync = ref.watch(alertsProvider);
+    final dark = ref.watch(themeModeProvider) == ThemeMode.dark;
+    final bg = dark ? kGray950 : kGray50;
+    final card = dark ? kGray900 : kGrayWhite;
+    final bd = dark ? kGray800 : kGray100;
+    final textP = dark ? Colors.white : kGray900Text;
     return Scaffold(
-      appBar: AppBar(
-        title: alerts.maybeWhen(data:(d){final u=d.where((e)=>!e.acknowledged).length; return Text('Alerts${u>0?" ($u)":" "}');}, orElse:()=>const Text('Alerts')),
-      ),
-      body: Column(children:[
-        // Filter tab bar
-        Container(
-          color: Colors.white,
-          padding:const EdgeInsets.symmetric(horizontal:12, vertical:8),
-          child:SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(
-            children:List.generate(tabs.length,(i)=>GestureDetector(
-              onTap:()=>setState(()=>_filter=tabs[i]),
-              child:Container(
-                margin:const EdgeInsets.only(right:6),
-                padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
-                decoration:BoxDecoration(
-                  color:_filter==tabs[i]?teal:Colors.transparent,
-                  borderRadius:BorderRadius.circular(20),
-                  border:Border.all(color:_filter==tabs[i]?teal:const Color(0xFFE5E7EB)),
-                ),
-                child:Text(labels[i], style:TextStyle(fontSize:11, fontWeight:_filter==tabs[i]?FontWeight.w600:FontWeight.w400, color:_filter==tabs[i]?Colors.white:const Color(0xFF6B7280))),
-              ),
-            )),
-          )),
-        ),
-        Expanded(
-          child:alerts.when(
-            loading:()=>const Center(child:CircularProgressIndicator()),
-            error:(e,_)=>Center(child:Text('$e')),
-            data:(list){
-              final filtered = list.where((a){
-                if(_filter=='threshold') return !a.isPredicted&&!a.isAnomaly;
-                if(_filter=='predicted') return a.isPredicted;
-                if(_filter=='anomaly') return a.isAnomaly;
-                return true;
-              }).toList();
-              if(filtered.isEmpty) return const Center(child:Text('No alerts', style:TextStyle(color:Color(0xFF9CA3AF))));
-              return RefreshIndicator(
-                onRefresh:()=>ref.read(alertsProvider.notifier).refresh(),
-                child:ListView.builder(
-                  padding:const EdgeInsets.fromLTRB(14,10,14,80),
-                  itemCount:filtered.length,
-                  itemBuilder:(_,i)=>AlertCard(
-                    alert:filtered[i],
-                    onAcknowledge:()=>ref.read(alertsProvider.notifier).acknowledge(filtered[i].id),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ]),
-    );
+      backgroundColor: bg,
+      appBar: AppBar(backgroundColor: dark ? kGray950 : kGrayWhite, elevation: 0,
+        leading: Builder(builder: (ctx) => IconButton(icon: Icon(Icons.menu, color: dark ? kGray400 : kGray600), onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer())),
+        title: Text('Alerts', style: TextStyle(color: textP, fontWeight: FontWeight.w700)),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: dark ? kGray800 : kGray100, height: 1))),
+      body: alertsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator(color: kTeal600)),
+        error: (e,_) => Center(child: Text('Error: $e', style: const TextStyle(color: kGray500))),
+        data: (events) => RefreshIndicator(color: kTeal600, onRefresh: () => ref.read(alertsProvider.notifier).refresh(),
+          child: events.isEmpty ? Center(child: Text('No alerts', style: TextStyle(color: dark ? kGray500 : kGray400)))
+          : ListView.builder(padding: const EdgeInsets.all(16), itemCount: events.length, itemBuilder: (_, i) {
+              final a = events[i];
+              final c = a.isAnomaly ? kViolet600 : a.isPredicted ? kAlertAmber : kRed500;
+              return Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: a.acknowledged ? bd : c.withValues(alpha: 0.4))),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(a.isAnomaly ? Icons.manage_search : a.isPredicted ? Icons.auto_awesome : Icons.warning_amber_rounded, size: 16, color: c),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(a.message, style: TextStyle(fontSize: 12, color: textP)),
+                    const SizedBox(height: 3),
+                    Text(a.triggeredAt, style: const TextStyle(fontSize: 10, color: kGray500)),
+                  ])),
+                  if (!a.acknowledged) GestureDetector(onTap: () => ref.read(alertsProvider.notifier).acknowledge(a.id),
+                    child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: kTeal600, borderRadius: BorderRadius.circular(8)),
+                      child: const Text('ACK', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)))),
+                ]));
+            }))));
   }
 }

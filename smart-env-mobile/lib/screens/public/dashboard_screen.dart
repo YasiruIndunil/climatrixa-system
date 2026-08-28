@@ -1,309 +1,107 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
-import '../../widgets/widgets.dart';
+import 'public_shell.dart';
 
-class DashboardScreen extends ConsumerStatefulWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
-
-  @override
-  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  String? _selectedSensorId;
-  String _forecastMetric = 'temperature';
-
-  @override
-  Widget build(BuildContext context) {
-    final readings  = ref.watch(readingsProvider);
-    final sensors   = ref.watch(sensorsProvider);
-
+  @override Widget build(BuildContext context, WidgetRef ref) {
+    final sensors  = ref.watch(sensorsProvider).valueOrNull ?? [];
+    final readings = ref.watch(readingsProvider).valueOrNull ?? [];
+    final alerts   = ref.watch(alertsProvider).valueOrNull ?? [];
+    final unread   = ref.watch(unreadAlertCountProvider);
+    final dark     = ref.watch(themeModeProvider) == ThemeMode.dark;
+    final bg   = dark ? kGray950 : kGray50;
+    final card = dark ? kGray900 : kGrayWhite;
+    final bd   = dark ? kGray800 : kGray100;
+    final textP = dark ? Colors.white : kGray900Text;
 
     return Scaffold(
+      backgroundColor: bg,
       appBar: AppBar(
-        leading: IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer(),
-            ),
-        title: const Text('Dashboard'),
+        backgroundColor: dark ? kGray950 : kGrayWhite,
+        elevation: 0,
+        leading: Builder(builder: (ctx) => IconButton(
+          icon: Icon(Icons.menu, color: dark ? kGray400 : kGray600),
+          onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer())),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 26, height: 26,
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [kTeal400, kTeal600]), borderRadius: BorderRadius.circular(7)),
+            child: const Icon(Icons.eco_rounded, size: 14, color: Colors.white)),
+          const SizedBox(width: 7),
+          Text('Climatrixa', style: TextStyle(color: dark ? Colors.white : kGray900Text, fontWeight: FontWeight.w700, fontSize: 15)),
+        ]),
+        centerTitle: true,
         actions: [
-          _AlertBell(),
-          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: dark ? kGray400 : kGray600),
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle()),
+          if (unread > 0) Stack(clipBehavior: Clip.none, children: [
+            IconButton(icon: const Icon(Icons.notifications_outlined), onPressed: () => context.go('/dashboard/alerts')),
+            Positioned(top: 6, right: 6, child: Container(width: 16, height: 16,
+              decoration: const BoxDecoration(color: kRed500, shape: BoxShape.circle),
+              child: Center(child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700))))),
+          ]),
         ],
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: dark ? kGray800 : kGray100, height: 1)),
       ),
-      body: readings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (readingList) {
-          // Determine the selected sensor
-          final available = sensors.valueOrNull ?? [];
-          if (_selectedSensorId == null && available.isNotEmpty) {
-            _selectedSensorId = available.first.id;
-          }
-          final reading = readingList.firstWhere(
-            (r) => r.sensorId == _selectedSensorId,
-            orElse: () => readingList.isNotEmpty ? readingList.first : Reading(
-              id: '', sensorId: '', temperature: 0, humidity: 0, aqi: 0,
-              recordedAt: '',
-            ),
-          );
-
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(readingsProvider),
-            child: ListView(
+      body: RefreshIndicator(
+        color: kTeal600,
+        onRefresh: () async { ref.invalidate(sensorsProvider); ref.invalidate(readingsProvider); },
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          if (sensors.isEmpty)
+            Center(child: Padding(padding: const EdgeInsets.all(40),
+              child: Text('No sensors assigned', style: TextStyle(color: dark ? kGray500 : kGray400)))),
+          ...sensors.map((s) {
+            final r = readings.where((r) => r.sensorId == s.id).isNotEmpty
+                ? readings.firstWhere((r) => r.sensorId == s.id) : null;
+            final hasAlert = alerts.any((a) => a.sensorId == s.id && !a.acknowledged);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(14),
-              children: [
-                // ── Sensor selector ─────────────────────────────────────
-                _SensorSelector(
-                  sensors: available,
-                  selectedId: _selectedSensorId,
-                  onChanged: (id) => setState(() => _selectedSensorId = id),
-                ),
-                const SizedBox(height: 12),
-
-                // ── 2×2 Metric grid ─────────────────────────────────────
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.5,
-                  children: [
-                    MetricCard(
-                      icon: Icons.thermostat,
-                      label: 'TEMPERATURE',
-                      value: reading.temperature.toStringAsFixed(1),
-                      unit: '°C',
-                    ),
-                    MetricCard(
-                      icon: Icons.water_drop,
-                      label: 'HUMIDITY',
-                      value: reading.humidity.toStringAsFixed(1),
-                      unit: '%',
-                      color: const Color(0xFF3B82F6),
-                      bg: const Color(0xFFEFF6FF),
-                    ),
-                    MetricCard(
-                      icon: Icons.air,
-                      label: 'CO₂',
-                      value: reading.aqi.toStringAsFixed(0),
-                      unit: 'ppm',
-                      color: const Color(0xFF8B5CF6),
-                      bg: const Color(0xFFF5F3FF),
-                    ),
-                    MetricCard(
-                      icon: Icons.wb_sunny_outlined,
-                      label: 'PRESSURE',
-                      value: reading.pressure?.toStringAsFixed(0) ?? '—',
-                      unit: 'hPa',
-                      color: const Color(0xFFF59E0B),
-                      bg: const Color(0xFFFFFBEB),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // ── AQI badge ────────────────────────────────────────────
-                AqiBadge(aqi: reading.aqi),
-                const SizedBox(height: 12),
-
-                // ── AI Forecast chart ────────────────────────────────────
-                if (_selectedSensorId != null) _ForecastCard(
-                  sensorId: _selectedSensorId!,
-                  metric: _forecastMetric,
-                  onMetricChange: (m) => setState(() => _forecastMetric = m),
-                ),
-                const SizedBox(height: 12),
-
-                // ── Alert banner ─────────────────────────────────────────
-                _AlertBanner(),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SensorSelector extends StatelessWidget {
-  final List<Sensor> sensors;
-  final String? selectedId;
-  final ValueChanged<String> onChanged;
-
-  const _SensorSelector(
-      {required this.sensors,
-      required this.selectedId,
-      required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    if (sensors.isEmpty) return const SizedBox();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB))),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedId,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              color: Color(0xFF6B7280)),
-          style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF1F2937)),
-          onChanged: (v) { if (v != null) onChanged(v); },
-          items: sensors
-              .map((s) => DropdownMenuItem(
-                    value: s.id,
-                    child: Text(s.name,
-                        overflow: TextOverflow.ellipsis),
-                  ))
-              .toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class _ForecastCard extends ConsumerWidget {
-  final String sensorId;
-  final String metric;
-  final ValueChanged<String> onMetricChange;
-
-  const _ForecastCard(
-      {required this.sensorId,
-      required this.metric,
-      required this.onMetricChange});
-
-  static const _metrics = [
-    ('temperature', 'Temp', Color(0xFF14B8A6)),
-    ('humidity',    'Hum.',  Color(0xFF3B82F6)),
-    ('aqi',         'IAQ',   Color(0xFF8B5CF6)),
-    ('pressure',    'Press', Color(0xFFF59E0B)),
-  ];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final forecast = ref.watch(forecastProvider(sensorId));
-    final (_, __, color) =
-        _metrics.firstWhere((m) => m.$1 == metric, orElse: () => _metrics.first);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Text('AI Forecast (24h)',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1F2937))),
-          const Spacer(),
-          const Icon(Icons.show_chart, size: 16, color: Color(0xFF14B8A6)),
-        ]),
-        const SizedBox(height: 8),
-        // Metric tabs
-        Row(children: _metrics.map((m) {
-          final (key, lbl, c) = m;
-          final sel = key == metric;
-          return GestureDetector(
-            onTap: () => onMetricChange(key),
-            child: Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                  color: sel ? c.withValues(alpha: .12) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: sel ? c : const Color(0xFFE5E7EB))),
-              child: Text(lbl,
-                  style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                      color: sel ? c : const Color(0xFF6B7280))),
-            ),
-          );
-        }).toList()),
-        const SizedBox(height: 10),
-        forecast.when(
-          loading: () =>
-              const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Text('Forecast unavailable', style: TextStyle(color: Colors.red, fontSize: 11)),
-          data: (pts) => ForecastChart(points: pts, metric: metric, lineColor: color),
-        ),
-      ]),
-    );
-  }
-}
-
-class _AlertBell extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final count = ref.watch(unreadAlertCountProvider);
-    return Stack(clipBehavior: Clip.none, children: [
-      IconButton(
-        icon: const Icon(Icons.notifications_outlined),
-        onPressed: () => context.go('/dashboard/alerts'),
-      ),
-      if (count > 0)
-        Positioned(
-          top: 6,
-          right: 6,
-          child: Container(
-            width: 16,
-            height: 16,
-            decoration: const BoxDecoration(
-                color: Color(0xFFEF4444), shape: BoxShape.circle),
-            child: Center(
-              child: Text(count > 9 ? '9+' : '$count',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ),
-    ]);
-  }
-}
-
-class _AlertBanner extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final count = ref.watch(unreadAlertCountProvider);
-    if (count == 0) return const SizedBox();
-    return GestureDetector(
-      onTap: () => context.go('/dashboard/alerts'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-            color: const Color(0xFFFFF0F0),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFCA5A5))),
-        child: Row(children: [
-          const Icon(Icons.warning_rounded,
-              size: 16, color: Color(0xFFEF4444)),
-          const SizedBox(width: 8),
-          Text('$count active ${count == 1 ? 'alert' : 'alerts'}',
-              style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFEF4444))),
-          const Spacer(),
-          const Text('View →',
-              style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
+              decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: hasAlert ? kRed500.withValues(alpha: 0.4) : bd)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(s.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textP)),
+                  const SizedBox(width: 8),
+                  Container(width: 7, height: 7, decoration: BoxDecoration(
+                    color: s.isActive ? const Color(0xFF22C55E) : kGray500, shape: BoxShape.circle)),
+                  if (hasAlert) ...[const SizedBox(width: 6),
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: kRed500, borderRadius: BorderRadius.circular(10)),
+                      child: const Text('ALERT', style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.w700)))],
+                ]),
+                const SizedBox(height: 3),
+                Text(s.location, style: const TextStyle(fontSize: 11, color: kGray500)),
+                if (r != null) ...[
+                  const SizedBox(height: 12),
+                  GridView.count(crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 6, crossAxisSpacing: 6, childAspectRatio: 2.5,
+                    children: [
+                      _mini('\${r.temperature.toStringAsFixed(1)}°C', 'Temp', kRed500, dark),
+                      _mini('\${r.humidity.toStringAsFixed(1)}%', 'Humidity', const Color(0xFF3B82F6), dark),
+                      _mini('\${r.aqi.toStringAsFixed(0)}', 'AQI', kTeal500, dark),
+                      _mini('\${r.pressure?.toStringAsFixed(0) ?? "—"} hPa', 'Pressure', kViolet600, dark),
+                    ]),
+                  const SizedBox(height: 6),
+                  Text('Updated: \${_fmt(r.recordedAt)}', style: const TextStyle(fontSize: 10, color: kGray500)),
+                ],
+              ]));
+          }),
         ]),
       ),
     );
   }
+  Widget _mini(String val, String lbl, Color c, bool dark) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(color: c.withValues(alpha: dark ? 0.12 : 0.08), borderRadius: BorderRadius.circular(9)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(val, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c)),
+      Text(lbl, style: const TextStyle(fontSize: 10, color: kGray500)),
+    ]));
+  String _fmt(String iso) { try { final d = DateTime.parse(iso).toLocal(); return '\${d.day}/\${d.month}/\${d.year} \${d.hour}:\${d.minute.toString().padLeft(2,"0")}'; } catch(_){ return iso; } }
 }

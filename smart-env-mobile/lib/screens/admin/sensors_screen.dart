@@ -1,8 +1,10 @@
-import 'admin_shell.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/models.dart';
+import '../../core/theme.dart';
+import '../../core/app_bar.dart';
+import 'admin_shell.dart';
 import '../../providers/providers.dart';
 
 class AdminSensorsScreen extends ConsumerStatefulWidget {
@@ -10,65 +12,163 @@ class AdminSensorsScreen extends ConsumerStatefulWidget {
   @override ConsumerState<AdminSensorsScreen> createState() => _S();
 }
 class _S extends ConsumerState<AdminSensorsScreen> {
-  String _q='';
-  @override
-  Widget build(BuildContext context) {
-    final sensors = ref.watch(sensorsProvider);
-    final readings = ref.watch(readingsProvider).valueOrNull??[];
-    final alerts = ref.watch(alertsProvider).valueOrNull??[];
-    const purple = Color(0xFF7C3AED);
+  String _q = '';
+  String _filter = 'all';
+
+  @override Widget build(BuildContext context) {
+    final sensors = ref.watch(sensorsProvider).valueOrNull ?? [];
+    final dark    = ref.watch(themeModeProvider) == ThemeMode.dark;
+    final bg      = dark ? kGray950 : kGray50;
+    final card    = dark ? kGray900 : kGrayWhite;
+    final border  = dark ? kGray800 : kGray100;
+    final textP   = dark ? Colors.white : kGray900Text;
+    final textS   = dark ? kGray500 : kGray500;
+
+    final filtered = sensors.where((s) {
+      final q = _q.toLowerCase();
+      final match = s.name.toLowerCase().contains(q) || s.location.toLowerCase().contains(q);
+      if (_filter == 'active')   return match && s.isActive;
+      if (_filter == 'inactive') return match && !s.isActive;
+      return match;
+    }).toList();
+
     return Scaffold(
-      appBar: AppBar(backgroundColor:purple, foregroundColor:Colors.white,
-        leading:IconButton(icon:const Icon(Icons.menu),onPressed:()=>AdminShell.scaffoldKey.currentState?.openDrawer()),
-        title:const Text('Sensors',style:TextStyle(color:Colors.white)),
-        actions:[IconButton(icon:const Icon(Icons.add,color:Colors.white), onPressed:()=>context.go('/admin/sensor/new')), const SizedBox(width:8)],
-      ),
-      body:Column(children:[
-        Padding(padding:const EdgeInsets.fromLTRB(14,10,14,6), child:TextField(decoration:const InputDecoration(hintText:'Search sensors…',prefixIcon:Icon(Icons.search,size:18),contentPadding:EdgeInsets.symmetric(vertical:10,horizontal:12)), onChanged:(v)=>setState(()=>_q=v.toLowerCase()))),
-        Expanded(child:sensors.when(
-          loading:()=>const Center(child:CircularProgressIndicator()),
-          error:(e,_)=>Center(child:Text('$e')),
-          data:(list){
-            final filtered = list.where((s)=>s.name.toLowerCase().contains(_q)||s.location.toLowerCase().contains(_q)).toList();
-            return RefreshIndicator(
-              onRefresh:()async{ref.invalidate(sensorsProvider);ref.invalidate(readingsProvider);},
-              child:ListView.builder(
-                padding:const EdgeInsets.fromLTRB(14,4,14,20),
-                itemCount:filtered.length,
-                itemBuilder:(_,i){
-                  final s=filtered[i];
-                  final r=readings.firstWhere((r)=>r.sensorId==s.id,orElse:()=>Reading(id:"",sensorId:"",temperature:0,humidity:0,aqi:0,recordedAt:""));
-                  final hasAlert=alerts.any((a)=>a.sensorId==s.id&&!a.acknowledged);
-                  return Container(margin:const EdgeInsets.only(bottom:10), padding:const EdgeInsets.all(12), decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12),border:Border.all(color:const Color(0xFFE5E7EB))), child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                    Row(children:[
-                      Icon(Icons.sensors,size:13,color:s.isActive?const Color(0xFF14B8A6):const Color(0xFF9CA3AF)),
-                      const SizedBox(width:6),
-                      Expanded(child:Text(s.name,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w600))),
-                      if(hasAlert) const Padding(padding:EdgeInsets.only(right:4),child:Icon(Icons.warning_rounded,size:12,color:Color(0xFFEF4444))),
-                      Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:2), decoration:BoxDecoration(color:s.isActive?const Color(0xFFCCFBF1):const Color(0xFFF3F4F6),borderRadius:BorderRadius.circular(8)), child:Text(s.isActive?'Active':'Inactive',style:TextStyle(fontSize:9,fontWeight:FontWeight.w700,color:s.isActive?const Color(0xFF0F766E):const Color(0xFF6B7280)))),
+      backgroundColor: bg,
+      appBar: climatrixaAppBar(context, ref, scaffoldKey: AdminShell.scaffoldKey),
+      body: Column(children: [
+        // Page header
+        Padding(padding: const EdgeInsets.fromLTRB(16,16,16,0), child: Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Sensors', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textP)),
+            Text('${sensors.length} of ${sensors.length} sensor nodes',
+                style: TextStyle(fontSize: 12, color: textS)),
+          ])),
+          ElevatedButton.icon(
+            onPressed: () => context.go('/admin/sensor/new'),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add sensor', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: kTeal600, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), elevation: 0),
+          ),
+        ])),
+        const SizedBox(height: 12),
+        // Search
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child:
+          TextField(
+            onChanged: (v) => setState(() => _q = v),
+            style: TextStyle(color: textP, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search by name, location or MAC...',
+              hintStyle: const TextStyle(color: kGray500, fontSize: 13),
+              prefixIcon: const Icon(Icons.search, color: kGray500, size: 18),
+              filled: true, fillColor: card,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kTeal600)),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          )),
+        const SizedBox(height: 8),
+        // Status filter
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(10), border: Border.all(color: border)),
+            child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+              value: _filter, isExpanded: true,
+              dropdownColor: card,
+              style: TextStyle(color: textP, fontSize: 13),
+              onChanged: (v) { if (v != null) setState(() => _filter = v); },
+              items: const [
+                DropdownMenuItem(value: 'all',      child: Text('All status')),
+                DropdownMenuItem(value: 'active',   child: Text('Active')),
+                DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+              ],
+            )),
+          )),
+        const SizedBox(height: 8),
+        // List
+        Expanded(child: RefreshIndicator(
+          color: kTeal600,
+          onRefresh: () async => ref.invalidate(sensorsProvider),
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            itemCount: filtered.length,
+            itemBuilder: (_, i) {
+              final s = filtered[i];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(14), border: Border.all(color: border)),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Signal icon
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: (s.isActive ? kTeal600 : kGray600).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.wifi_tethering_rounded, size: 22,
+                        color: s.isActive ? kTeal600 : kGray500),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(s.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textP)),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      const Icon(Icons.location_on_outlined, size: 12, color: kGray500),
+                      const SizedBox(width: 3),
+                      Text(s.location, style: const TextStyle(fontSize: 11, color: kGray500)),
                     ]),
-                    const SizedBox(height:2),
-                    Text(s.location,style:const TextStyle(fontSize:9.5,color:Color(0xFF9CA3AF))),
-                    if(r.sensorId.isNotEmpty) Padding(padding:const EdgeInsets.only(top:4),child:Text('Temp: ${r.temperature.toStringAsFixed(1)}°C · Hum: ${r.humidity.toStringAsFixed(0)}%',style:const TextStyle(fontSize:10,color:Color(0xFF6B7280)))),
-                    const SizedBox(height:8),
-                    Row(children:[
-                      Expanded(child:_Btn('Edit',Icons.edit,const Color(0xFF6B7280),()=>context.go('/admin/sensor/${s.id}/edit'))),
-                      const SizedBox(width:6),
-                      Expanded(child:_Btn('Access',Icons.people,purple,(){})),
-                      const SizedBox(width:6),
-                      Expanded(child:_Btn('Delete',Icons.delete,const Color(0xFFEF4444),()=>_confirmDelete(context,ref,s.id,s.name))),
+                    if (s.macAddress != null) ...[
+                      const SizedBox(height: 2),
+                      Text(s.macAddress!, style: const TextStyle(fontSize: 11, color: kGray500, fontFamily: 'monospace')),
+                    ],
+                    if (s.industryProfile != null || (s.latitude != null && s.longitude != null)) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        [if (s.industryProfile != null) s.industryProfile!,
+                          if (s.latitude != null) '${s.latitude!.toStringAsFixed(4)}, ${s.longitude!.toStringAsFixed(4)}']
+                            .join(' · '),
+                        style: const TextStyle(fontSize: 11, color: kGray500)),
+                    ],
+                    const SizedBox(height: 10),
+                    // Status + actions row
+                    Row(children: [
+                      Row(children: [
+                        Container(width: 7, height: 7, decoration: BoxDecoration(
+                            color: s.isActive ? const Color(0xFF22C55E) : kGray500,
+                            shape: BoxShape.circle)),
+                        const SizedBox(width: 5),
+                        Text(s.isActive ? 'Active' : 'Inactive',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                                color: s.isActive ? const Color(0xFF22C55E) : kGray500)),
+                      ]),
+                      const Spacer(),
+                      _IconBtn(Icons.tune_rounded, kGray400, () {}),
+                      const SizedBox(width: 8),
+                      _IconBtn(Icons.edit_outlined, kGray400,
+                          () => context.go('/admin/sensor/${s.id}/edit')),
+                      const SizedBox(width: 8),
+                      _IconBtn(Icons.remove_red_eye_outlined, kGray400,
+                          () => context.push('/dashboard/sensor/${s.id}')),
                     ]),
-                  ]));
-                },
-              ),
-            );
-          },
+                  ])),
+                ]),
+              );
+            },
+          ),
         )),
       ]),
     );
   }
-  Widget _Btn(String l, IconData ic, Color c, VoidCallback fn) => GestureDetector(onTap:fn, child:Container(padding:const EdgeInsets.symmetric(vertical:5), decoration:BoxDecoration(color:c.withValues(alpha: .1),borderRadius:BorderRadius.circular(7)), child:Row(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(ic,size:11,color:c),const SizedBox(width:3),Text(l,style:TextStyle(fontSize:9.5,color:c,fontWeight:FontWeight.w500))])));
-  void _confirmDelete(BuildContext ctx, WidgetRef ref, String id, String name){
-    showDialog(context:ctx, builder:(_)=>AlertDialog(title:const Text('Delete sensor?'), content:Text('Remove $name from the system?'), actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')), TextButton(onPressed:()async{Navigator.pop(ctx);await ref.read(apiProvider).deleteSensor(id);ref.invalidate(sensorsProvider);},child:const Text('Delete',style:TextStyle(color:Color(0xFFEF4444))))]));
-  }
 }
+
+Widget _IconBtn(IconData icon, Color color, VoidCallback onTap) =>
+    GestureDetector(onTap: onTap,
+        child: Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, size: 16, color: color)));

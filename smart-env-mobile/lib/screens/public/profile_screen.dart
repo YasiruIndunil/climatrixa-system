@@ -1,99 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme.dart';
 import '../../providers/providers.dart';
+import 'public_shell.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authProvider);
-    final sensors = ref.watch(sensorsProvider);
-    const teal = Color(0xFF14B8A6);
-    final user = auth.user;
+  @override Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authProvider).user;
+    final dark = ref.watch(themeModeProvider) == ThemeMode.dark;
+    final bg = dark ? kGray950 : kGray50;
+    final card = dark ? kGray900 : kGrayWhite;
+    final bd = dark ? kGray800 : kGray100;
+    final textP = dark ? Colors.white : kGray900Text;
     return Scaffold(
-      appBar: AppBar(title: const Text('My Profile')),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
-          // Account card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: Row(children: [
-              CircleAvatar(backgroundColor: teal, radius: 24, child: Text((user?.email[0]??'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18))),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(user?.displayName ?? user?.email ?? '—', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                if(user?.email != null) Text(user!.email, style: const TextStyle(fontSize: 10.5, color: Color(0xFF6B7280))),
-                const SizedBox(height: 4),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: const Color(0xFFCCFBF1), borderRadius: BorderRadius.circular(6)), child: const Text('Public User', style: TextStyle(fontSize: 9, color: Color(0xFF0F766E), fontWeight: FontWeight.w600))),
-              ])),
-            ]),
-          ),
-          const SizedBox(height: 10),
-          // Assigned sensors
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              sensors.when(data:(list)=>Text('Assigned Sensors (${list.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)), loading:()=>const Text('Assigned Sensors', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)), error:(_,__)=>const Text('Assigned Sensors', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-              const SizedBox(height: 8),
-              sensors.when(
-                loading: () => const CircularProgressIndicator(),
-                error: (e,_) => Text('$e', style: const TextStyle(fontSize: 11)),
-                data: (list) => Column(children: list.map((s) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Icon(Icons.sensors, size: 13, color: s.isActive ? teal : const Color(0xFF9CA3AF)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(s.name, style: const TextStyle(fontSize: 11.5))),
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1), decoration: BoxDecoration(color: s.isActive ? const Color(0xFFCCFBF1) : const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)), child: Text(s.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600, color: s.isActive ? const Color(0xFF0F766E) : const Color(0xFF6B7280)))),
-                    const Icon(Icons.chevron_right, size: 14, color: Color(0xFF9CA3AF)),
-                  ]),
-                )).toList()),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 10),
-          // Notifications (UI-only toggles — implement with user preferences endpoint)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Notifications', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              ...['Threshold Alerts', 'AI Predictions', 'Anomaly Alerts'].map((label) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
-                  Switch(value: true, activeColor: teal, onChanged: (_) {}),
-                ]),
-              )),
-            ]),
-          ),
-          const SizedBox(height: 10),
-          ListTile(
-            tileColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            leading: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF6B7280)),
-            title: const Text('Change Password', style: TextStyle(fontSize: 13)),
-            trailing: const Icon(Icons.chevron_right, size: 16),
-            onTap: () {},
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () async { await ref.read(authProvider.notifier).logout(); if(context.mounted) context.go('/login'); },
-              icon: const Icon(Icons.logout, size: 16, color: Color(0xFFEF4444)),
-              label: const Text('Sign Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700)),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFCA5A5)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 12)),
-            ),
-          ),
-          const SizedBox(height: 30),
-        ],
-      ),
+      backgroundColor: bg,
+      appBar: AppBar(backgroundColor: dark ? kGray950 : kGrayWhite, elevation: 0,
+        leading: Builder(builder: (ctx) => IconButton(icon: Icon(Icons.menu, color: dark ? kGray400 : kGray600), onPressed: () => PublicShell.scaffoldKey.currentState?.openDrawer())),
+        title: Text('Profile', style: TextStyle(color: textP, fontWeight: FontWeight.w700)),
+        bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(color: dark ? kGray800 : kGray100, height: 1))),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16), border: Border.all(color: bd)),
+          child: Column(children: [
+            CircleAvatar(radius: 32, backgroundColor: kTeal600,
+              child: Text((user?.email.isNotEmpty == true ? user!.email[0].toUpperCase() : 'U'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 22))),
+            const SizedBox(height: 12),
+            Text(user?.displayName ?? user?.email ?? '—', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textP)),
+            const SizedBox(height: 4),
+            Text(user?.email ?? '', style: const TextStyle(fontSize: 12, color: kGray500)),
+            const SizedBox(height: 8),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(color: kTeal600.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text(user?.isAdmin == true ? 'Admin' : 'Public User',
+                style: const TextStyle(fontSize: 11, color: kTeal500, fontWeight: FontWeight.w600))),
+            const SizedBox(height: 20),
+            SizedBox(width: double.infinity, child: OutlinedButton.icon(
+              onPressed: () async { await ref.read(authProvider.notifier).logout(); if (context.mounted) context.go('/login'); },
+              icon: const Icon(Icons.logout_rounded, size: 16, color: kRed500),
+              label: const Text('Sign out', style: TextStyle(color: kRed500)),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: kRed500),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+          ])),
+      ]),
     );
   }
 }
