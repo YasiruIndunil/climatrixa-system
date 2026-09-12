@@ -36,3 +36,9 @@ npm-debug.log*
 # AI model artifacts (stored in Supabase Storage, not git)
 *.pkl
 models/
+
+# Gradle local cache/home (Flutter/Android builds)
+.gradle-home/
+
+# Firebase service account credentials (secrets)
+smart-env-backend/firebase-service-account.json
